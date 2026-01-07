@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* =========================
+   Design System (LIGHT)
+========================= */
+:root {
+  --app-bg: #eeeeee;
+  --card-bg: #f3f3f3;
+  --border-color: #e5e5e5;
+
+  --text-main: #171717;
+  --text-muted: #7a7a7a;
+
+  --primary: #e11d48; /* red */
+}
+
+/* =========================
+   Dark Mode (future-ready)
+========================= */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #0a0a0a;
+    --card-bg: #121212;
+    --border-color: #262626;
+
+    --text-main: #ededed;
+    --text-muted: #a1a1aa;
+  }
+}
+
+/* =========================
+   Tailwind Theme Bridge
+========================= */
+@theme inline {
+  --color-background: var(--app-bg);
+  --color-foreground: var(--text-main);
+}
+
+/* =========================
+   Global Base
+========================= */
+body {
+  background: var(--app-bg);
+  color: var(--text-main);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer components {
+  .app-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+  }
+
+  .app-text {
+    color: var(--text-main);
+  }
+
+  .app-muted {
+    color: var(--text-muted);
+  }
+
+  .app-primary {
+    background-color: var(--primary);
+    color: #ffffff;
+  }
+
+  .app-input {
+    background-color: var(--card-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+  }
+}
