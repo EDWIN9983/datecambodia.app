@@ -5,17 +5,25 @@ import { useEffect, useMemo, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { blockUser } from "@/lib/firestore";
 
 type PublicUser = {
   uid: string;
   name: string;
   dob: string;
-  gender: string;
+  gender?: "male" | "female" | "other";
   lookingFor: string;
   city: string;
   bio: string;
   interests: string[];
   photos: string[];
+  nationality?: string;
+  publicId?: string;
+  isPremium?: boolean;
+  likesCount?: number;
+  lastActive?: any;
   isBanned?: boolean;
 };
 
@@ -28,12 +36,74 @@ function calcAge(dob: string) {
   return age;
 }
 
+function countryFlag(nationality?: string) {
+  if (!nationality) return "🌍";
+  const map: Record<string, string> = {
+    Cambodian: "🇰🇭",
+    Thai: "🇹🇭",
+    Vietnamese: "🇻🇳",
+    Chinese: "🇨🇳",
+    Korean: "🇰🇷",
+    Japanese: "🇯🇵",
+    Indian: "🇮🇳",
+    Filipino: "🇵🇭",
+    Malaysian: "🇲🇾",
+    Singaporean: "🇸🇬",
+    Indonesian: "🇮🇩",
+    Australian: "🇦🇺",
+    French: "🇫🇷",
+    German: "🇩🇪",
+    British: "🇬🇧",
+    American: "🇺🇸",
+    Canadian: "🇨🇦",
+  };
+  return map[nationality] || "🌍";
+}
+
+function genderBadge(g?: string) {
+  if (g === "male") return "♂";
+  if (g === "female") return "♀";
+  return "⚧";
+}
+
+function likesBadge(count = 0) {
+  if (count >= 100) return { label: "👑 Hot", accent: "text-pink-400" };
+  if (count >= 50) return { label: "🔥 Popular", accent: "text-orange-400" };
+  return { label: `❤️ ${count}`, accent: "text-red-400" };
+}
+
+function formatLastSeen(ts: any) {
+  if (!ts?.toDate) return null;
+  const diff = Date.now() - ts.toDate().getTime();
+  if (diff < 2 * 60 * 1000) return "Online";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `Last seen ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Last seen ${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `Last seen ${days}d ago`;
+}
+
+function subtitleFromInterests(interests?: string[]) {
+  const list = interests || [];
+  const hasShortStay = list.includes("Short stay") || list.includes("Just visiting");
+  if (hasShortStay) return "Short stay · Open to meet";
+  return "Here for fun & good vibes";
+}
+
 export default function PublicProfilePage() {
   const { uid } = useParams<{ uid: string }>();
   const router = useRouter();
 
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [myUid, setMyUid] = useState<string | null>(null);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, (u) => {
+      if (u) setMyUid(u.uid);
+    });
+  }, []);
 
   useEffect(() => {
     if (!uid) return;
@@ -47,37 +117,32 @@ export default function PublicProfilePage() {
         }
 
         const data = snap.data() as PublicUser;
-
         if (data.isBanned) {
           router.replace("/discover");
           return;
         }
 
-        setUser({ uid, ...data });
+        setUser(data);
       } finally {
         setLoading(false);
       }
     })();
   }, [uid, router]);
 
-  const age = useMemo(
-    () => (user?.dob ? calcAge(user.dob) : null),
-    [user?.dob]
-  );
+  const age = useMemo(() => (user?.dob ? calcAge(user.dob) : null), [user?.dob]);
 
-  if (loading) return null;
-  if (!user) return null;
+  if (loading || !user) return null;
+
+  const likes = likesBadge(user.likesCount || 0);
+  const subtitle = subtitleFromInterests(user.interests);
 
   return (
     <PageShell title="Profile">
       <div className="space-y-4">
-        {/* Photos */}
+        {/* HERO PHOTO */}
         <div className="rounded-2xl overflow-hidden app-card">
           {user.photos?.[0] ? (
-            <img
-              src={user.photos[0]}
-              className="w-full h-[420px] object-cover"
-            />
+            <img src={user.photos[0]} className="w-full h-[420px] object-cover" />
           ) : (
             <div className="h-[420px] flex items-center justify-center app-muted text-sm">
               No photo
@@ -85,34 +150,86 @@ export default function PublicProfilePage() {
           )}
         </div>
 
-        {/* Basic info */}
-        <div className="rounded-2xl app-card p-4">
-          <div className="text-xl font-semibold app-text">
-            {user.name}
-            {age !== null && `, ${age}`}
-          </div>
+        {/* PROFILE INFO */}
+        <div className="rounded-2xl app-card p-4 space-y-3">
+          {/* NAME + TOP BADGES */}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm px-2 py-0.5 rounded-full app-card">
+                {genderBadge(user.gender)}
+              </span>
 
-          <div className="text-sm app-muted mt-1">
-            {user.city} · Looking for {user.lookingFor}
-          </div>
+              <div
+                className={`text-2xl font-bold ${
+                  user.isPremium ? "text-yellow-300" : "app-text"
+                }`}
+              >
+                {user.name}
+                {age !== null && `, ${age}`}
+              </div>
 
-          {user.bio && (
-            <div className="mt-3 text-sm app-text">
-              {user.bio}
+              {/* VIP badge */}
+              {user.isPremium && (
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                  VIP
+                </span>
+              )}
+
+              {/* Likes near name */}
+              <span className={`text-sm font-semibold ${likes.accent}`}>
+                {likes.label}
+              </span>
+
+              {/* Public ID near name */}
+              {user.publicId && (
+                <span className="text-xs px-2 py-1 rounded-full app-card app-text">
+                  {user.publicId}
+                </span>
+              )}
             </div>
+
+            {/* Subtitle under name */}
+            <div className="text-sm app-muted mt-1">{subtitle}</div>
+
+            {/* Country + City line */}
+            <div className="text-sm app-muted mt-1">
+              {countryFlag(user.nationality)} {user.nationality} · {user.city}
+            </div>
+          </div>
+
+          {/* META LINE */}
+          <div className="text-xs app-muted flex flex-wrap gap-x-3 gap-y-1">
+            {user.lastActive && <span>{formatLastSeen(user.lastActive)}</span>}
+            <span>Looking for {user.lookingFor}</span>
+          </div>
+
+          {/* ABOUT */}
+          {user.bio && <div className="text-sm app-text">{user.bio}</div>}
+
+          {/* BLOCK BUTTON */}
+          {myUid && myUid !== user.uid && (
+            <button
+              onClick={async () => {
+                if (!confirm("Block this user?")) return;
+                await blockUser(myUid, user.uid);
+                router.replace("/discover");
+              }}
+              className="w-full mt-3 rounded-xl border border-red-400 text-red-500 py-2 text-sm font-semibold"
+            >
+              Block user
+            </button>
           )}
         </div>
 
-        {/* Interests */}
+        {/* INTERESTS */}
         {user.interests?.length > 0 && (
           <div className="rounded-2xl app-card p-4">
-            <div className="text-sm font-semibold mb-2 app-text">Interests</div>
+            <div className="text-sm font-semibold mb-2 app-text">
+              What I’m into right now
+            </div>
             <div className="flex flex-wrap gap-2">
               {user.interests.map((i) => (
-                <span
-                  key={i}
-                  className="rounded-full border px-3 py-1 text-xs app-text"
-                >
+                <span key={i} className="rounded-full border px-3 py-1 text-xs app-text">
                   {i}
                 </span>
               ))}

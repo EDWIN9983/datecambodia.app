@@ -10,7 +10,9 @@ import {
   getDocs,
   query,
   where,
+  limit,
 } from "firebase/firestore";
+import { usePathname, useRouter } from "next/navigation";
 
 type Props = {
   title?: string;
@@ -20,14 +22,31 @@ type Props = {
 
 export default function PageShell({ title, children, stickyMenu }: Props) {
   const [open, setOpen] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [search, setSearch] = useState("");
+
   const [hasLikeNotif, setHasLikeNotif] = useState(false);
   const [hasSystemNotif, setHasSystemNotif] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+
+  /* -----------------------------
+     AUTO-CLOSE SEARCH ON ROUTE CHANGE
+  ------------------------------*/
+  useEffect(() => {
+    setShowSearchModal(false);
+    setSearch("");
+  }, [pathname]);
 
   async function logout() {
     await signOut(auth);
     window.location.href = "/login";
   }
 
+  /* -----------------------------
+     LIKE + DATE NOTIFICATIONS ONLY
+  ------------------------------*/
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
@@ -58,68 +77,135 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
     return () => unsub();
   }, []);
 
-  const showDot = hasLikeNotif || hasSystemNotif;
-  const showPulse = hasLikeNotif && hasSystemNotif;
+  const hasAnyNotif = hasLikeNotif || hasSystemNotif;
+
+  /* -----------------------------
+     SEARCH BY PUBLIC ID
+  ------------------------------*/
+  async function runSearch() {
+    const v = search.trim();
+    if (!/^#(\d{5}|[A-Z]{3}\d{6})$/.test(v)) return;
+
+    try {
+      const q = query(
+        collection(db, "users"),
+        where("publicId", "==", v),
+        limit(1)
+      );
+
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+
+      setShowSearchModal(false);
+      setSearch("");
+
+      router.push(`/u/${snap.docs[0].id}`);
+    } catch {}
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 pb-16">
-      {/* Header */}
-      <header className="bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-        <h1 className="text-lg font-semibold">{title}</h1>
+      {/* HEADER */}
+      <header className="bg-white border-b px-4 py-3 sticky top-0 z-30">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold">{title}</h1>
 
-        <div className="flex items-center gap-4">
-          {/* Notification Icon */}
-          <Link
-            href="/activity"
-            className="relative text-xl"
-            aria-label="Notifications"
-          >
-            ❤️
-            {showDot && (
-              <span
-                className={`absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 ${
-                  showPulse ? "animate-ping" : ""
-                }`}
-              />
-            )}
-          </Link>
+          <div className="flex items-center gap-4">
+            {/* SEARCH ICON */}
+            <button
+              type="button"
+              onClick={() => {
+                router.push("/discover");
+                setShowSearchModal(true);
+              }}
+              className="text-xl"
+            >
+              🔍
+            </button>
 
-          {/* Hamburger */}
-          <button onClick={() => setOpen(!open)} className="text-xl">
-            ☰
-          </button>
+            {/* NOTIFICATIONS */}
+            <Link href="/activity" className="relative text-sm font-semibold">
+              ❤️
+              {hasAnyNotif && (
+                <span className="ml-1 rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] text-white">
+                  NEW
+                </span>
+              )}
+            </Link>
+
+            {/* MENU */}
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              className="text-xl"
+            >
+              ☰
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Sticky menu (optional) */}
       {stickyMenu}
 
-      {/* Hamburger menu */}
+      {/* SEARCH MODAL (DISCOVER ONLY) */}
+      {showSearchModal && pathname === "/discover" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="app-card w-[90%] max-w-sm rounded-2xl p-4">
+            <div className="text-sm font-semibold mb-2 app-text">
+              Search User by ID
+            </div>
+
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") runSearch();
+              }}
+              placeholder="e.g. #00012"
+              className="w-full app-input mb-3"
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={runSearch}
+                className="flex-1 app-primary rounded-xl py-2 font-semibold"
+              >
+                Search
+              </button>
+              <button
+                onClick={() => {
+                  setShowSearchModal(false);
+                  setSearch("");
+                }}
+                className="flex-1 app-card rounded-xl py-2 font-semibold app-text"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HAMBURGER MENU */}
       {open && (
         <div className="absolute top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow">
           <nav className="flex flex-col divide-y text-sm">
-            <Link href="/home" className="px-4 py-3" onClick={() => setOpen(false)}>
-              Home
-            </Link>
-            <Link href="/discover" className="px-4 py-3" onClick={() => setOpen(false)}>
-              Discover
-            </Link>
-            <Link href="/dates" className="px-4 py-3" onClick={() => setOpen(false)}>
-              Dates
-            </Link>
-            <Link href="/pubs" className="px-4 py-3" onClick={() => setOpen(false)}>
-              Pubs & Events
-            </Link>
             <Link href="/profile" className="px-4 py-3" onClick={() => setOpen(false)}>
               Profile
             </Link>
             <Link href="/store" className="px-4 py-3" onClick={() => setOpen(false)}>
               Store
             </Link>
+            <Link href="/settings" className="px-4 py-3" onClick={() => setOpen(false)}>
+              Settings
+            </Link>
+            <Link href="/contact" className="px-4 py-3" onClick={() => setOpen(false)}>
+              Contact Us
+            </Link>
             <Link href="/legal" className="px-4 py-3" onClick={() => setOpen(false)}>
               Info
             </Link>
-
             <button
               onClick={logout}
               className="px-4 py-3 text-left text-red-600"
@@ -130,10 +216,7 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
         </div>
       )}
 
-      {/* Page content */}
       <main className="max-w-md mx-auto p-4">{children}</main>
-
-      {/* Bottom navigation */}
       <BottomNav />
     </div>
   );

@@ -14,6 +14,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import Link from "next/link";
@@ -29,6 +30,7 @@ type ChatDoc = {
     senderId: string;
     createdAt: any;
   } | null;
+  unread?: Record<string, number>;
 };
 
 type ChatPreview = {
@@ -38,6 +40,7 @@ type ChatPreview = {
   otherPhoto?: string;
   lastText: string;
   lastAt: any | null;
+  unreadCount: number;
 };
 
 function makeChatId(a: string, b: string) {
@@ -73,7 +76,7 @@ export default function MessagesPage() {
         return;
       }
 
-      setMe({ uid: user.uid, ...(snap.data() as UserDoc) });
+      setMe(snap.data() as UserDoc);
     });
 
     return () => unsub();
@@ -107,7 +110,7 @@ function MessagesInner({ me }: { me: UserDoc }) {
   async function fetchUser(uid: string) {
     const snap = await getDoc(doc(db, "users", uid));
     if (!snap.exists()) return null;
-    const u = { uid, ...(snap.data() as UserDoc) } as UserDoc;
+    const u = snap.data() as UserDoc;
     if (u.isBanned) return null;
     return u;
   }
@@ -142,7 +145,8 @@ function MessagesInner({ me }: { me: UserDoc }) {
 
   async function ensureChat(myUid: string, otherUid: string) {
     const eligible =
-      (await hasMutualLike(myUid, otherUid)) || (await hasAcceptedDate(myUid, otherUid));
+      (await hasMutualLike(myUid, otherUid)) ||
+      (await hasAcceptedDate(myUid, otherUid));
 
     if (!eligible) return null;
 
@@ -157,6 +161,7 @@ function MessagesInner({ me }: { me: UserDoc }) {
         createdAt: serverTimestamp(),
         isMatched: true,
         lastMessage: null,
+        unread: { [myUid]: 0, [otherUid]: 0 },
       } as ChatDoc);
     }
 
@@ -166,6 +171,7 @@ function MessagesInner({ me }: { me: UserDoc }) {
   async function load() {
     setLoading(true);
     clearUnsubs();
+    setPreviews([]);
 
     try {
       const sentLikesSnap = await getDocs(
@@ -202,11 +208,13 @@ function MessagesInner({ me }: { me: UserDoc }) {
       const dateUids = new Set<string>();
       for (const d of sentDatesSnap.docs) {
         const data = d.data() as any;
-        if (data?.status === "accepted" && data?.toUser) dateUids.add(data.toUser);
+        if (data?.status === "accepted" && data?.toUser)
+          dateUids.add(data.toUser);
       }
       for (const d of recvDatesSnap.docs) {
         const data = d.data() as any;
-        if (data?.status === "accepted" && data?.fromUser) dateUids.add(data.fromUser);
+        if (data?.status === "accepted" && data?.fromUser)
+          dateUids.add(data.fromUser);
       }
 
       const allOther = new Set<string>();
@@ -223,46 +231,54 @@ function MessagesInner({ me }: { me: UserDoc }) {
         })
       );
 
-      const chatTargets: { chatId: string; otherUid: string }[] = [];
       for (const otherUid of otherUids) {
-        if (!userMap.get(otherUid)) continue;
-        const chatId = await ensureChat(me.uid, otherUid);
-        if (!chatId) continue;
-        chatTargets.push({ chatId, otherUid });
-      }
-
-      const nextMap = new Map<string, ChatPreview>();
-
-      for (const t of chatTargets) {
-        const other = userMap.get(t.otherUid);
+        const other = userMap.get(otherUid);
         if (!other) continue;
 
-        const ref = doc(db, "chats", t.chatId);
+        const chatId = await ensureChat(me.uid, otherUid);
+        if (!chatId) continue;
+
+        const ref = doc(db, "chats", chatId);
+
         const unsub = onSnapshot(
           ref,
           (snap) => {
             if (!snap.exists()) return;
 
             const data = snap.data() as ChatDoc;
-            const lastText = data?.lastMessage?.text ? String(data.lastMessage.text) : "";
+
+            if (!data.unread) {
+              updateDoc(ref, {
+                unread: Object.fromEntries(data.users.map((u) => [u, 0])),
+              }).catch(() => {});
+            }
+
+            const lastText = data?.lastMessage?.text
+              ? String(data.lastMessage.text)
+              : "";
             const lastAt = data?.lastMessage?.createdAt || null;
+            const unreadCount = data?.unread?.[me.uid] ?? 0;
 
-            nextMap.set(t.chatId, {
-              chatId: t.chatId,
-              otherUid: t.otherUid,
-              otherName: other.name || "User",
-              otherPhoto: other.photos?.[0],
-              lastText,
-              lastAt,
+            setPreviews((prev) => {
+              const next = prev.filter((p) => p.chatId !== chatId);
+              next.push({
+                chatId,
+                otherUid,
+                otherName: other.name || "User",
+                otherPhoto: other.photos?.[0],
+                lastText,
+                lastAt,
+                unreadCount,
+              });
+
+              next.sort((a, b) => {
+                const at = a.lastAt?.toMillis?.() ? a.lastAt.toMillis() : 0;
+                const bt = b.lastAt?.toMillis?.() ? b.lastAt.toMillis() : 0;
+                return bt - at;
+              });
+
+              return next;
             });
-
-            const sorted = Array.from(nextMap.values()).sort((a, b) => {
-              const at = a.lastAt?.toMillis?.() ? a.lastAt.toMillis() : 0;
-              const bt = b.lastAt?.toMillis?.() ? b.lastAt.toMillis() : 0;
-              return bt - at;
-            });
-
-            setPreviews(sorted);
           },
           () => {
             pop("Failed to load chats");
@@ -282,10 +298,12 @@ function MessagesInner({ me }: { me: UserDoc }) {
   useEffect(() => {
     load();
     return () => clearUnsubs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.uid]);
 
-  const empty = useMemo(() => !loading && previews.length === 0, [loading, previews.length]);
+  const empty = useMemo(
+    () => !loading && previews.length === 0,
+    [loading, previews.length]
+  );
 
   return (
     <PageShell title="Messages">
@@ -305,12 +323,22 @@ function MessagesInner({ me }: { me: UserDoc }) {
             <Link
               key={p.chatId}
               href={`/messages/${p.chatId}`}
+              onClick={() => {
+                if (p.unreadCount > 0) {
+                  updateDoc(doc(db, "chats", p.chatId), {
+                    [`unread.${me.uid}`]: 0,
+                  }).catch(() => {});
+                }
+              }}
               className="app-card rounded-2xl p-4 block"
             >
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 overflow-hidden rounded-xl app-card">
                   {p.otherPhoto ? (
-                    <img src={p.otherPhoto} className="h-full w-full object-cover" />
+                    <img
+                      src={p.otherPhoto}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <div className="h-full w-full" />
                   )}
@@ -318,11 +346,21 @@ function MessagesInner({ me }: { me: UserDoc }) {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold app-text truncate">
-                      {p.otherName}
+                    <div className="flex items-center min-w-0">
+                      <div className="text-sm font-semibold app-text truncate">
+                        {p.otherName}
+                      </div>
+
+                      {p.unreadCount > 0 && (
+                        <div className="ml-2 h-2 w-2 rounded-full app-primary" />
+                      )}
                     </div>
-                    <div className="text-xs app-muted">{formatTime(p.lastAt)}</div>
+
+                    <div className="text-xs app-muted">
+                      {formatTime(p.lastAt)}
+                    </div>
                   </div>
+
                   <div className="text-xs app-muted truncate">
                     {p.lastText ? p.lastText : "Say hi…"}
                   </div>

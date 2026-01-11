@@ -1,3 +1,4 @@
+// app/messages/[chatId]/page.tsx
 "use client";
 
 import PageShell from "@/components/PageShell";
@@ -14,19 +15,23 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  increment,
 } from "firebase/firestore";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type ChatDoc = {
   users: string[];
   createdAt?: any;
   isMatched?: boolean;
+  dateAt?: any;
+  reopenUntil?: any;
   lastMessage?: {
     text: string;
     senderId: string;
     createdAt: any;
   } | null;
+  unread?: Record<string, number>;
 };
 
 type MsgDoc = {
@@ -67,7 +72,7 @@ export default function ChatPage() {
         return;
       }
 
-      setMe({ uid: user.uid, ...(snap.data() as UserDoc) });
+      setMe(snap.data() as UserDoc);
     });
 
     return () => unsub();
@@ -80,12 +85,17 @@ export default function ChatPage() {
 
 function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
   const router = useRouter();
+
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [other, setOther] = useState<UserDoc | null>(null);
+
   const [messages, setMessages] = useState<(MsgDoc & { id: string })[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [chatOpen, setChatOpen] = useState<boolean | null>(null);
+
   const unsubRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,35 +106,57 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
 
   useEffect(() => {
     async function init() {
-      const chatSnap = await getDoc(doc(db, "chats", chatId));
-      if (!chatSnap.exists()) {
+      let chat: ChatDoc;
+
+      try {
+        const chatSnap = await getDoc(doc(db, "chats", chatId));
+        if (!chatSnap.exists()) {
+          router.replace("/messages");
+          return;
+        }
+
+        chat = chatSnap.data() as ChatDoc;
+
+        if (!chat.users.includes(me.uid)) {
+          router.replace("/messages");
+          return;
+        }
+      } catch {
         router.replace("/messages");
         return;
       }
 
-      const chat = chatSnap.data() as ChatDoc;
-      if (!chat?.users || chat.users.length !== 2) {
-        router.replace("/messages");
-        return;
+      const now = Date.now();
+      const dateAt = chat.dateAt?.toMillis?.();
+      const reopenUntil = chat.reopenUntil?.toMillis?.();
+
+      const isOpen =
+        (dateAt && now <= dateAt) || (reopenUntil && now <= reopenUntil);
+
+      setChatOpen(Boolean(isOpen));
+
+      const otherUid = chat.users.find((u) => u !== me.uid);
+      if (otherUid) {
+        try {
+          const otherSnap = await getDoc(doc(db, "users", otherUid));
+          if (otherSnap.exists()) {
+            setOther(otherSnap.data() as UserDoc);
+          }
+        } catch {}
       }
 
-      if (!chat.users.includes(me.uid)) {
-        router.replace("/messages");
-        return;
-      }
-
-      const otherUid = chat.users[0] === me.uid ? chat.users[1] : chat.users[0];
-      const otherSnap = await getDoc(doc(db, "users", otherUid));
-      if (otherSnap.exists()) {
-        setOther({ uid: otherUid, ...(otherSnap.data() as UserDoc) });
-      } else {
-        setOther({ uid: otherUid } as UserDoc);
-      }
+      try {
+        await updateDoc(doc(db, "chats", chatId), {
+          [`unread.${me.uid}`]: 0,
+        });
+      } catch {}
 
       const q = query(
         collection(db, "chats", chatId, "messages"),
         orderBy("createdAt", "asc")
       );
+
+      setReady(true);
 
       unsubRef.current = onSnapshot(
         q,
@@ -134,13 +166,20 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
             ...(d.data() as MsgDoc),
           }));
           setMessages(list);
-          setReady(true);
+
           window.setTimeout(() => {
             bottomRef.current?.scrollIntoView({ behavior: "smooth" });
           }, 10);
+
+          if (list.length > 0) {
+            try {
+              updateDoc(doc(db, "chats", chatId), {
+                [`unread.${me.uid}`]: 0,
+              });
+            } catch {}
+          }
         },
         () => {
-          pop("Failed to load messages");
           setReady(true);
         }
       );
@@ -158,7 +197,7 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
 
   const title = useMemo(() => {
     if (!other) return "Messages";
-    return other.name ? other.name : "Chat";
+    return other.name || "Chat";
   }, [other]);
 
   async function send() {
@@ -166,27 +205,70 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
     if (!t) return;
 
     setSending(true);
+
     try {
+      const chatRef = doc(db, "chats", chatId);
+      const snap = await getDoc(chatRef);
+      if (!snap.exists()) {
+        setSending(false);
+        return;
+      }
+
+      const chat = snap.data() as ChatDoc;
+
+      const now = Date.now();
+      const dateAt = chat.dateAt?.toMillis?.();
+      const reopenUntil = chat.reopenUntil?.toMillis?.();
+
+      const isOpen =
+        (dateAt && now <= dateAt) || (reopenUntil && now <= reopenUntil);
+
+      setChatOpen(Boolean(isOpen));
+
+      if (!isOpen) {
+        pop("Chat closed. Reopen with 50 Pulse.");
+        setSending(false);
+        return;
+      }
+
+      const otherUid = chat.users.find((u) => u !== me.uid);
+
       await addDoc(collection(db, "chats", chatId, "messages"), {
         senderId: me.uid,
         text: t,
         createdAt: serverTimestamp(),
       } as MsgDoc);
 
-      await updateDoc(doc(db, "chats", chatId), {
-        lastMessage: {
-          text: t,
-          senderId: me.uid,
-          createdAt: serverTimestamp(),
-        },
-      } as Partial<ChatDoc>);
+      if (otherUid) {
+        try {
+          await updateDoc(chatRef, {
+            lastMessage: {
+              text: t,
+              senderId: me.uid,
+              createdAt: serverTimestamp(),
+            },
+            [`unread.${otherUid}`]: increment(1),
+          });
+        } catch {}
+      } else {
+        try {
+          await updateDoc(chatRef, {
+            lastMessage: {
+              text: t,
+              senderId: me.uid,
+              createdAt: serverTimestamp(),
+            },
+          });
+        } catch {}
+      }
 
       setText("");
+
       window.setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 10);
-    } catch (e: any) {
-      pop(e?.message || "Failed to send");
+    } catch {
+      pop("Failed to send");
     } finally {
       setSending(false);
     }
@@ -195,6 +277,12 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
   return (
     <PageShell title={title}>
       {toast && <div className="mb-3 app-card p-3 text-sm app-text">{toast}</div>}
+
+      {chatOpen === false && (
+        <div className="mb-3 app-card p-3 text-sm app-text">
+          Chat closed. Reopen with 50 Pulse.
+        </div>
+      )}
 
       {!ready ? (
         <div className="app-card rounded-2xl p-6 text-center text-sm app-muted">
@@ -207,16 +295,25 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
               No messages yet.
             </div>
           ) : (
-            messages.map((m) => (
-              <div key={m.id} className="app-card rounded-2xl p-3">
-                <div className="text-sm app-text whitespace-pre-wrap">
-                  {m.text}
+            messages.map((m) => {
+              const mine = m.senderId === me.uid;
+
+              return (
+                <div
+                  key={m.id}
+                  className={mine ? "flex justify-end" : "flex justify-start"}
+                >
+                  <div className="app-card rounded-2xl p-3">
+                    <div className="text-sm app-text whitespace-pre-wrap">
+                      {m.text}
+                    </div>
+                    <div className="mt-1 text-xs app-muted">
+                      {formatTime(m.createdAt)}
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-xs app-muted">
-                  {formatTime(m.createdAt)}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
           <div ref={bottomRef} />
         </div>
@@ -232,7 +329,7 @@ function ChatInner({ me, chatId }: { me: UserDoc; chatId: string }) {
         />
         <button
           onClick={send}
-          disabled={sending || text.trim().length === 0}
+          disabled={sending || text.trim().length === 0 || chatOpen === false}
           className="mt-3 w-full app-primary rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send"}

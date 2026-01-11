@@ -1,3 +1,4 @@
+// app/discover/page.tsx
 "use client";
 
 import PageShell from "@/components/PageShell";
@@ -7,9 +8,10 @@ import {
   sendDateRequest,
   getUserDoc,
   markViewed,
+  getBlockedUserIds,
 } from "@/lib/firestore";
 import type { UserDoc } from "@/lib/types";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -31,6 +33,19 @@ function calcAge(dob?: string) {
   return age;
 }
 
+function todayISO() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+function nowTimeHHMMPlus(minutes = 0) {
+  const d = new Date(Date.now() + minutes * 60 * 1000);
+  const hh = `${d.getHours()}`.padStart(2, "0");
+  const mm = `${d.getMinutes()}`.padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [me, setMe] = useState<UserDoc | null>(null);
@@ -40,7 +55,7 @@ export default function DiscoverPage() {
       if (!user) return router.replace("/login");
       const snap = await getDoc(doc(db, "users", user.uid));
       if (!snap.exists()) return router.replace("/profile-setup");
-      setMe({ uid: user.uid, ...(snap.data() as UserDoc) });
+      setMe(snap.data() as UserDoc);
     });
     return () => unsub();
   }, [router]);
@@ -60,13 +75,22 @@ function DiscoverInner({ me }: { me: UserDoc }) {
   const [history, setHistory] = useState<UserDoc[]>([]);
   const [busy, setBusy] = useState(false);
 
+  const [showDate, setShowDate] = useState(false);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [place, setPlace] = useState("");
+  const [placeId, setPlaceId] = useState<string | null>(null);
+
+  const placeInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompleteRef = useRef<any>(null);
+
   useEffect(() => {
     (async () => {
-      const u = await listDiscoverUsers({
-        currentUid: me.uid,
-        city: me.city,
-        lookingFor: me.lookingFor,
-      });
+      const blockedIds = await getBlockedUserIds(me.uid);
+
+      const u = (await listDiscoverUsers({ currentUid: me.uid })).filter(
+        (x) => !blockedIds.includes(x.uid)
+      );
 
       const shuffled = [...u];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -78,10 +102,31 @@ function DiscoverInner({ me }: { me: UserDoc }) {
       setIdx(0);
       setHistory([]);
     })();
-  }, [me.uid, me.city, me.lookingFor]);
+  }, [me.uid]);
 
   const current = users[idx];
   const age = useMemo(() => calcAge(current?.dob), [current?.dob]);
+
+  useEffect(() => {
+    if (!showDate) return;
+    if (!placeInputRef.current) return;
+    if (!(window as any).google?.maps?.places) return;
+
+    autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(
+      placeInputRef.current,
+      {
+        componentRestrictions: { country: "kh" },
+        fields: ["place_id", "name", "formatted_address"],
+      }
+    );
+
+    autocompleteRef.current.addListener("place_changed", () => {
+      const p = autocompleteRef.current.getPlace();
+      if (!p?.place_id) return;
+      setPlace(p.name || "");
+      setPlaceId(p.place_id);
+    });
+  }, [showDate]);
 
   async function next() {
     if (!current) return;
@@ -110,13 +155,11 @@ function DiscoverInner({ me }: { me: UserDoc }) {
     }
   }
 
-  async function askDate() {
-    if (!current) return;
-    const date =
-      prompt("Date (YYYY-MM-DD)", new Date().toISOString().slice(0, 10)) || "";
-    const time = prompt("Time (HH:mm)", "19:00") || "";
-    const place = prompt("Place", "Sky Lounge") || "";
-    if (!date || !time || !place) return;
+  async function confirmDate() {
+    if (!current || !date || !time || !place || !placeId) return;
+
+    const selected = new Date(`${date} ${time}`);
+    if (selected.getTime() <= Date.now()) return;
 
     setBusy(true);
     try {
@@ -129,9 +172,18 @@ function DiscoverInner({ me }: { me: UserDoc }) {
         date,
         time,
         place,
+        placeId,
       });
 
+      setShowDate(false);
+      setDate("");
+      setTime("");
+      setPlace("");
+      setPlaceId(null);
+
       await next();
+    } catch {
+      alert("You already sent a date request to this user.");
     } finally {
       setBusy(false);
     }
@@ -170,6 +222,59 @@ function DiscoverInner({ me }: { me: UserDoc }) {
             </Link>
           </div>
 
+          {showDate && (
+            <div className="mt-4 space-y-3">
+              <input
+                type="date"
+                className="w-full app-input"
+                min={todayISO()}
+                value={date}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  if (e.target.value === todayISO()) {
+                    setTime("");
+                  }
+                }}
+              />
+
+              <input
+                type="time"
+                className="w-full app-input"
+                min={date === todayISO() ? nowTimeHHMMPlus(15) : undefined}
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+
+              <input
+                ref={placeInputRef}
+                type="text"
+                className="w-full app-input"
+                placeholder="Search place (Cambodia only)"
+                value={place}
+                onChange={(e) => {
+                  setPlace(e.target.value);
+                  setPlaceId(null);
+                }}
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={confirmDate}
+                  disabled={busy || !date || !time || !place || !placeId}
+                  className="app-primary rounded-xl px-4 py-2 font-semibold disabled:opacity-50"
+                >
+                  Send
+                </button>
+                <button
+                  onClick={() => setShowDate(false)}
+                  className="app-card rounded-xl px-4 py-2 font-semibold app-text"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 grid grid-cols-4 gap-3">
             <button
               disabled={!me.isPremium || busy}
@@ -197,7 +302,7 @@ function DiscoverInner({ me }: { me: UserDoc }) {
 
             <button
               disabled={busy}
-              onClick={askDate}
+              onClick={() => setShowDate(true)}
               className="rounded-xl app-card px-4 py-3 font-semibold app-text"
             >
               📅

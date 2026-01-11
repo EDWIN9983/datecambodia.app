@@ -5,23 +5,25 @@ import PageShell from "@/components/PageShell";
 
 export default function LegalPage() {
   // Refs for each section
-  const privacyRef = useRef<HTMLElement>(null);
-  const termsRef = useRef<HTMLElement>(null);
-  const safetyRef = useRef<HTMLElement>(null);
-  const guidelinesRef = useRef<HTMLElement>(null);
-  const aboutRef = useRef<HTMLElement>(null);
-  const contactRef = useRef<HTMLElement>(null);
+  const privacyRef = useRef<HTMLElement | null>(null);
+  const termsRef = useRef<HTMLElement | null>(null);
+  const safetyRef = useRef<HTMLElement | null>(null);
+  const guidelinesRef = useRef<HTMLElement | null>(null);
+  const aboutRef = useRef<HTMLElement | null>(null);
+  const contactRef = useRef<HTMLElement | null>(null);
 
   // Scroll helper with header + sticky menu offset
-  function scrollTo(ref: React.RefObject<HTMLElement>) {
+  function scrollTo(ref: React.RefObject<HTMLElement | null>) {
     if (!ref.current) return;
-    const headerHeight = 56; // PageShell header height in px
-    const stickyHeight = 48; // Sticky menu height in px
-    const y = ref.current.getBoundingClientRect().top + window.scrollY - (headerHeight + stickyHeight + 8);
+    const headerHeight = 56;
+    const stickyHeight = 48;
+    const y =
+      ref.current.getBoundingClientRect().top +
+      window.scrollY -
+      (headerHeight + stickyHeight + 8);
     window.scrollTo({ top: y, behavior: "smooth" });
   }
 
-  // Sticky menu inside PageShell
   const stickyMenu = (
     <div className="sticky top-14 z-20 bg-white border-b py-2 px-4 flex flex-wrap gap-2 overflow-x-auto">
       <button onClick={() => scrollTo(privacyRef)} className="px-3 py-1 rounded bg-[var(--primary)] text-white text-xs font-medium">Privacy</button>

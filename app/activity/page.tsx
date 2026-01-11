@@ -34,44 +34,53 @@ function formatTime(ts: any) {
 
 export default function Page() {
   const router = useRouter();
+
   const [me, setMe] = useState<UserDoc | null>(null);
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /* -----------------------------
+     AUTH + PROFILE LOAD
+  ------------------------------*/
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      if (!fbUser) {
         router.replace("/login");
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
+      const snap = await getDoc(doc(db, "users", fbUser.uid));
       if (!snap.exists()) {
         router.replace("/profile-setup");
         return;
       }
 
-      setMe({ uid: user.uid, ...(snap.data() as UserDoc) });
+      setMe(snap.data() as UserDoc);
     });
 
     return () => unsub();
   }, [router]);
 
+  /* -----------------------------
+     LOAD ACTIVITY (STRICT TS SAFE)
+  ------------------------------*/
   useEffect(() => {
-    if (!me) return;
+    if (!auth.currentUser) return;
+
+    const uid = auth.currentUser.uid;
 
     async function load() {
       setLoading(true);
 
       const likesQ = query(
         collection(db, "likes"),
-        where("toUser", "==", me.uid),
+        where("toUser", "==", uid),
         orderBy("createdAt", "desc")
       );
 
       const datesQ = query(
         collection(db, "dateRequests"),
-        where("fromUser", "==", me.uid),
+        where("fromUser", "==", uid),
         orderBy("respondedAt", "desc")
       );
 
@@ -84,6 +93,8 @@ export default function Page() {
 
       for (const d of likesSnap.docs) {
         const fromUid = d.data().fromUser;
+        if (!fromUid) continue;
+
         const uSnap = await getDoc(doc(db, "users", fromUid));
         if (!uSnap.exists()) continue;
 
@@ -130,9 +141,11 @@ export default function Page() {
     }
 
     load();
-  }, [me]);
+  }, []);
 
   if (!me) return null;
+
+  const isPremium = Boolean((me as any).isPremium);
 
   return (
     <PageShell title="Activity">
@@ -160,13 +173,13 @@ export default function Page() {
                 {i.type === "like" && (
                   <button
                     onClick={() =>
-                      me.isPremium
+                      isPremium
                         ? router.push(`/u/${i.fromUser}`)
                         : router.push("/store")
                     }
                     className="mt-1 text-xs font-semibold app-primary underline"
                   >
-                    {me.isPremium ? "View profile" : "Unlock to see who"}
+                    {isPremium ? "View profile" : "Unlock to see who"}
                   </button>
                 )}
               </div>
@@ -176,7 +189,7 @@ export default function Page() {
                   <img
                     src={i.photo}
                     className={`h-full w-full object-cover ${
-                      me.isPremium ? "" : "blur-md"
+                      isPremium ? "" : "blur-md"
                     }`}
                   />
                 </div>

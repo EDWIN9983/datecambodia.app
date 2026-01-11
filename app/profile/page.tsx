@@ -17,20 +17,59 @@ const CAMBODIA_CITIES = [
   "Kratie","Stung Treng","Koh Kong","Pailin","Tbong Khmum",
 ];
 
-const INTERESTS = [
-  "Music","Travel","Coffee","Food","Movies","Fitness","Nightlife","Gaming",
-  "Nature","Business","Art","Sports","Pets","Photography","Cooking","Reading",
+// 🔹 SHORT-TERM INTEREST CATEGORIES (DATA ONLY)
+const INTEREST_CATEGORIES = [
+  {
+    key: "social",
+    label: "☕ Social & Casual",
+    options: ["Coffee", "Drinks", "Beer", "Cocktails", "Late night", "Chill"],
+  },
+  {
+    key: "activities",
+    label: "🌆 Activities",
+    options: ["Night market", "Riverside", "Rooftop", "City walk", "Party", "Live music"],
+  },
+  {
+    key: "relax",
+    label: "🏖️ Relax & Escape",
+    options: ["Beach", "Sunset", "Pool", "Staycation", "Weekend trip"],
+  },
+  {
+    key: "indoors",
+    label: "🎬 Indoors",
+    options: ["Netflix", "Movies", "Gaming", "Music", "Karaoke"],
+  },
+  {
+    key: "vibe",
+    label: "🔥 Vibe / Energy",
+    options: ["Flirty", "Chill vibe", "Fun", "Spontaneous", "Private", "Easygoing"],
+  },
+  {
+    key: "availability",
+    label: "⏰ Availability",
+    options: ["Tonight", "Late night only", "Weekends", "Short stay", "Just visiting"],
+  },
+  {
+    key: "background",
+    label: "🌍 Background",
+    options: ["Local", "Expat", "Traveler", "Digital nomad"],
+  },
+  {
+    key: "preferences",
+    label: "🚫 Preferences",
+    options: ["No drama", "No pressure", "Discreet", "Respectful", "Good vibes"],
+  },
 ];
 
 export default function EditProfilePage() {
   const router = useRouter();
 
   const [uid, setUid] = useState<string | null>(null);
-  const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [bio, setBio] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,7 +90,6 @@ export default function EditProfilePage() {
 
       const data = snap.data();
       setUid(user.uid);
-      setName(data.name || "");
       setCity(data.city || "");
       setBio(data.bio || "");
       setInterests(data.interests || []);
@@ -62,11 +100,11 @@ export default function EditProfilePage() {
   }, [router]);
 
   function toggleInterest(label: string) {
-    setInterests((prev) => {
-      if (prev.includes(label)) return prev.filter((i) => i !== label);
-      if (prev.length >= 10) return prev;
-      return [...prev, label];
-    });
+    setInterests((prev) =>
+      prev.includes(label)
+        ? prev.filter((i) => i !== label)
+        : [...prev, label].slice(0, 25)
+    );
   }
 
   async function uploadPhoto(file: File) {
@@ -86,7 +124,6 @@ export default function EditProfilePage() {
 
   async function save() {
     if (!uid) return;
-    if (!name.trim()) return setError("Name is required");
     if (!city) return setError("City is required");
     if (!bio.trim()) return setError("Bio is required");
 
@@ -95,7 +132,6 @@ export default function EditProfilePage() {
 
     try {
       await updateDoc(doc(db, "users", uid), {
-        name: name.trim(),
         city,
         bio: bio.trim(),
         interests,
@@ -115,23 +151,19 @@ export default function EditProfilePage() {
 
   return (
     <PageShell title="Edit Profile">
-      <div className="mx-auto w-full max-w-md app-card rounded-xl p-6 shadow">
-        <h1 className="text-xl font-semibold mb-4 text-center app-text">
+      <div className="mx-auto w-full max-w-md app-card rounded-xl p-6 shadow space-y-5">
+        <h1 className="text-xl font-semibold text-center app-text">
           Edit Profile
         </h1>
 
         {/* Photos */}
-        <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
           {photos.map((p) => (
-            <img
-              key={p}
-              src={p}
-              className="h-20 w-20 rounded object-cover"
-            />
+            <img key={p} src={p} className="h-20 w-20 rounded object-cover" />
           ))}
         </div>
 
-        <label className="cursor-pointer mb-4 inline-block app-primary text-center py-2 px-4 rounded font-medium">
+        <label className="cursor-pointer inline-block app-primary text-center py-2 px-4 rounded font-medium">
           Add photo
           <input
             type="file"
@@ -141,15 +173,8 @@ export default function EditProfilePage() {
           />
         </label>
 
-        <input
-          className="w-full app-input mb-3"
-          placeholder="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
         <select
-          className="w-full app-input mb-3"
+          className="w-full app-input"
           value={city}
           onChange={(e) => setCity(e.target.value)}
         >
@@ -160,32 +185,51 @@ export default function EditProfilePage() {
         </select>
 
         <textarea
-          className="w-full app-input mb-3"
+          className="w-full app-input"
           rows={3}
           placeholder="Bio"
           value={bio}
           onChange={(e) => setBio(e.target.value)}
         />
 
-        <div className="mb-4">
-          <div className="text-sm font-semibold mb-2 app-text">
-            Interests (max 10)
+        {/* 🔥 INTERESTS */}
+        <div className="space-y-3">
+          <div className="text-sm font-semibold app-text">
+            What I’m into right now
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {INTERESTS.map((i) => (
-              <label key={i} className="flex items-center gap-2 text-sm app-text">
-                <input
-                  type="checkbox"
-                  checked={interests.includes(i)}
-                  onChange={() => toggleInterest(i)}
-                />
-                {i}
-              </label>
-            ))}
-          </div>
+
+          {INTEREST_CATEGORIES.map((cat) => (
+            <div key={cat.key} className="app-card rounded-lg">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenCategory(openCategory === cat.key ? null : cat.key)
+                }
+                className="w-full px-3 py-2 text-left font-medium app-text flex justify-between"
+              >
+                {cat.label}
+                <span>{openCategory === cat.key ? "−" : "+"}</span>
+              </button>
+
+              {openCategory === cat.key && (
+                <div className="px-3 pb-3 grid grid-cols-2 gap-2">
+                  {cat.options.map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm app-text">
+                      <input
+                        type="checkbox"
+                        checked={interests.includes(opt)}
+                        onChange={() => toggleInterest(opt)}
+                      />
+                      {opt}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
-        {error && <div className="text-sm app-primary mb-3">{error}</div>}
+        {error && <div className="text-sm app-primary">{error}</div>}
 
         <button
           onClick={save}

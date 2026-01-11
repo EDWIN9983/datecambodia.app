@@ -12,7 +12,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-100 text-black">{children}</body>
+      <body className="bg-gray-100 text-black">
+        {children}
+
+        {/* Google Maps Places API */}
+        <script
+          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyChPGTqjXPTbi6B5ZJRgK87FKfrTBPrzgw&libraries=places"
+          async
+          defer
+        ></script>
+      </body>
     </html>
   );
 }

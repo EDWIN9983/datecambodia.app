@@ -1,3 +1,4 @@
+// lib/firestore.ts
 import {
   collection,
   query,
@@ -9,8 +10,9 @@ import {
   getDoc,
   updateDoc,
   setDoc,
+  deleteDoc,
 } from "firebase/firestore";
-import { db, auth } from "./firebase";
+import { db, auth } from "@/lib/firebase";
 
 // =========================
 // TYPES
@@ -25,7 +27,11 @@ export type UserDoc = {
   isAdmin?: boolean;
   isPremium?: boolean;
   dailyDateCount?: number;
+  dailyLikeCount?: number;
   lastReset?: any;
+  lastLikeReset?: any;
+  lastDiscoverReset?: any;
+  viewedToday?: string[];
   isBanned?: boolean;
 };
 
@@ -35,10 +41,8 @@ export type UserDoc = {
 export async function getUserDoc(uid: string): Promise<UserDoc | null> {
   const ref = doc(db, "users", uid);
   const snap = await getDoc(ref);
-
   if (!snap.exists()) return null;
-
-  return { uid, ...(snap.data() as UserDoc) };
+  return snap.data() as UserDoc;
 }
 
 // =========================
@@ -58,14 +62,12 @@ export async function listDiscoverUsers({
   currentUid: string;
 }) {
   const q = query(collection(db, "users"));
-
   const snap = await getDocs(q);
 
   return snap.docs
-    .map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }))
+    .map((d) => d.data() as UserDoc)
     .filter((u) => u.uid !== currentUid && !u.isBanned);
 }
-
 
 // =========================
 // LIKE USER
@@ -80,10 +82,8 @@ export async function likeUser(fromUid: string, toUid: string) {
   await incrementDailyLike(fromUid);
 }
 
-
-
 // =========================
-// DATE REQUEST
+// DATE REQUEST (FIXED)
 // =========================
 export async function sendDateRequest({
   fromUser,
@@ -91,25 +91,55 @@ export async function sendDateRequest({
   date,
   time,
   place,
+  placeId,
 }: {
   fromUser: UserDoc;
   toUserId: string;
   date: string;
   time: string;
   place: string;
+  placeId: string;
 }) {
-  await addDoc(collection(db, "dateRequests"), {
-    fromUser: fromUser.uid,
-    toUser: toUserId,
+  const a = fromUser.uid;
+  const b = toUserId;
+
+  const forwardId = `${a}_${b}`;
+  const reverseId = `${b}_${a}`;
+
+  const forwardRef = doc(db, "dateRequests", forwardId);
+  const reverseRef = doc(db, "dateRequests", reverseId);
+
+  const [forwardSnap, reverseSnap] = await Promise.all([
+    getDoc(forwardRef),
+    getDoc(reverseRef),
+  ]);
+
+  if (forwardSnap.exists()) {
+    const d = forwardSnap.data() as any;
+    if (d.status === "pending" || d.status === "accepted") {
+      throw new Error("DATE_REQUEST_EXISTS");
+    }
+  }
+
+  if (reverseSnap.exists()) {
+    const d = reverseSnap.data() as any;
+    if (d.status === "pending" || d.status === "accepted") {
+      throw new Error("REVERSE_DATE_REQUEST_EXISTS");
+    }
+  }
+
+  await setDoc(forwardRef, {
+    fromUser: a,
+    toUser: b,
     date,
     time,
     place,
+    placeId,
     status: "pending",
     createdAt: serverTimestamp(),
   });
 
-  // update daily counter
-  const userRef = doc(db, "users", fromUser.uid);
+  const userRef = doc(db, "users", a);
   await updateDoc(userRef, {
     dailyDateCount: (fromUser.dailyDateCount || 0) + 1,
     lastReset: serverTimestamp(),
@@ -124,12 +154,14 @@ export async function updateUserPhoto(photoUrl: string) {
   if (!user) return;
 
   const ref = doc(db, "users", user.uid);
-
   await updateDoc(ref, {
     photos: [photoUrl],
   });
 }
 
+// =========================
+// VIEW TRACKING
+// =========================
 function isSameDay(a: Date, b: Date) {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -162,6 +194,10 @@ export async function markViewed(uid: string, viewedUid: string) {
     lastDiscoverReset: serverTimestamp(),
   });
 }
+
+// =========================
+// DAILY LIKE COUNTER
+// =========================
 export async function incrementDailyLike(uid: string) {
   const ref = doc(db, "users", uid);
   const snap = await getDoc(ref);
@@ -183,3 +219,30 @@ export async function incrementDailyLike(uid: string) {
   });
 }
 
+// ======================================================
+// 🔒 BLOCK LOGIC (v1) — ADDED (NO EXISTING CODE TOUCHED)
+// ======================================================
+
+// Block user
+export async function blockUser(fromUid: string, toUid: string) {
+  await setDoc(doc(db, "blocks", `${fromUid}_${toUid}`), {
+    fromUid,
+    toUid,
+    createdAt: new Date(),
+  });
+}
+
+// Unblock user
+export async function unblockUser(fromUid: string, toUid: string) {
+  await deleteDoc(doc(db, "blocks", `${fromUid}_${toUid}`));
+}
+
+// Get blocked user IDs
+export async function getBlockedUserIds(uid: string): Promise<string[]> {
+  const q = query(
+    collection(db, "blocks"),
+    where("fromUid", "==", uid)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data().toUid);
+}

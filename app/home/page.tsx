@@ -17,31 +17,78 @@ import { useAuth } from "@/lib/useAuth";
 import { db } from "@/lib/firebase";
 import PageShell from "@/components/PageShell";
 
-// =========================
-// TYPES
-// =========================
 type UserProfile = {
   uid: string;
   name?: string;
-  photos?: string[];
+  dob?: string;
+  gender?: "male" | "female" | "other";
   city?: string;
-  isAdmin?: boolean;
+  bio?: string;
+  interests?: string[];
+  photos?: string[];
+  nationality?: string;
+  publicId?: string;
+  likesCount?: number;
   isPremium?: boolean;
+  isAdmin?: boolean;
   isBanned?: boolean;
   dailyDateCount?: number;
 };
 
-// =========================
-// HELPERS
-// =========================
-function todayKeyLocal() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+function calcAge(dob?: string) {
+  if (!dob) return null;
+  const b = new Date(dob);
+  const t = new Date();
+  let age = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--;
+  return age;
 }
 
-// =========================
-// PAGE
-// =========================
+function countryFlag(nationality?: string) {
+  if (!nationality) return "🌍";
+  const map: Record<string, string> = {
+    Cambodian: "🇰🇭",
+    Thai: "🇹🇭",
+    Vietnamese: "🇻🇳",
+    Chinese: "🇨🇳",
+    Korean: "🇰🇷",
+    Japanese: "🇯🇵",
+    Indian: "🇮🇳",
+    Filipino: "🇵🇭",
+    Malaysian: "🇲🇾",
+    Singaporean: "🇸🇬",
+    Indonesian: "🇮🇩",
+    Australian: "🇦🇺",
+    French: "🇫🇷",
+    German: "🇩🇪",
+    British: "🇬🇧",
+    American: "🇺🇸",
+    Canadian: "🇨🇦",
+  };
+  return map[nationality] || "🌍";
+}
+
+function genderBadge(g?: string) {
+  if (g === "male") return "♂";
+  if (g === "female") return "♀";
+  return "⚧";
+}
+
+function likesBadge(count = 0) {
+  if (count >= 100) return { label: "👑 Hot", accent: "text-pink-400" };
+  if (count >= 50) return { label: "🔥 Popular", accent: "text-orange-400" };
+  return { label: `❤️ ${count}`, accent: "text-red-400" };
+}
+
+function subtitleFromInterests(interests?: string[]) {
+  const list = interests || [];
+  if (list.includes("Short stay") || list.includes("Just visiting")) {
+    return "Short stay · Open to meet";
+  }
+  return "Here for fun & good vibes";
+}
+
 export default function HomePage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -51,12 +98,8 @@ export default function HomePage() {
   const [incomingCount, setIncomingCount] = useState(0);
   const [outgoingCount, setOutgoingCount] = useState(0);
 
-  // =========================
-  // LOAD PROFILE
-  // =========================
   useEffect(() => {
     if (loading) return;
-
     if (!user) {
       router.replace("/login");
       return;
@@ -65,32 +108,24 @@ export default function HomePage() {
     (async () => {
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
-
-        if (!snap.exists() || !snap.data()?.name) {
+        if (!snap.exists()) {
           router.replace("/profile-setup");
           return;
         }
-
         const data = snap.data() as UserProfile;
-
         if (data.isBanned) {
           router.replace("/login");
           return;
         }
-
-        setProfile({ ...data, uid: user.uid });
+        setProfile(data);
       } finally {
         setProfileLoading(false);
       }
     })();
   }, [user, loading, router]);
 
-  // =========================
-  // LOAD DATE COUNTS
-  // =========================
   useEffect(() => {
     if (!profile?.uid) return;
-
     (async () => {
       const incomingQ = query(
         collection(db, "dateRequests"),
@@ -98,127 +133,140 @@ export default function HomePage() {
         orderBy("createdAt", "desc"),
         limit(10)
       );
-
       const outgoingQ = query(
         collection(db, "dateRequests"),
         where("fromUser", "==", profile.uid),
         orderBy("createdAt", "desc"),
         limit(10)
       );
-
       const [inSnap, outSnap] = await Promise.all([
         getDocs(incomingQ),
         getDocs(outgoingQ),
       ]);
-
       setIncomingCount(inSnap.size);
       setOutgoingCount(outSnap.size);
     })();
   }, [profile?.uid]);
 
-  const dailyLeft = useMemo(() => {
-    if (profile?.isAdmin) return "Unlimited";
-    return Math.max(0, 10 - (profile?.dailyDateCount || 0));
-  }, [profile?.dailyDateCount, profile?.isAdmin]);
-
-  if (loading || profileLoading) return null;
-  if (!profile) return null;
+  if (loading || profileLoading || !profile) return null;
 
   const avatar = profile.photos?.[0];
+  const age = calcAge(profile.dob);
+  const likes = likesBadge(profile.likesCount || 0);
+  const subtitle = subtitleFromInterests(profile.interests);
 
   return (
-    <PageShell title="Home">
-      <div className="space-y-4">
-        {/* Profile Card */}
-        <div className="app-card rounded-2xl p-4 flex gap-4 items-center">
-          <div className="h-14 w-14 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
-            {avatar ? (
-              <img
-                src={avatar}
-                alt="Profile"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-xs app-muted">Photo</span>
-            )}
-          </div>
-
-          <div className="flex-1">
-            <div className="text-sm app-muted">Hi,</div>
-            <div className="text-xl font-semibold app-text">
-              {profile.name} 👋
+    <PageShell title="My Profile">
+      <div className="app-card rounded-2xl overflow-hidden">
+        {/* HERO */}
+        <div className="relative h-[320px] bg-gray-200">
+          {avatar ? (
+            <img src={avatar} className="w-full h-full object-cover" />
+          ) : (
+            <div className="h-full flex items-center justify-center app-muted">
+              No photo
             </div>
-            <div className="text-xs app-muted">
-              {profile.city || "Cambodia"}
-              {profile.isPremium ? " · Premium" : ""}
-              {profile.isAdmin ? " · Admin" : ""}
-            </div>
-          </div>
-        </div>
+          )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="app-card rounded-xl p-3">
-            <div className="text-xs app-muted">
-              Date requests left today
-            </div>
-            <div className="text-lg font-semibold app-text">
-              {dailyLeft}
-            </div>
-          </div>
-
-          <div className="app-card rounded-xl p-3">
-            <div className="text-xs app-muted">Today</div>
-            <div className="text-lg font-semibold app-text">
-              {todayKeyLocal()}
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <Link
-          href="/discover"
-          className="block w-full rounded-xl app-primary px-4 py-3 text-center font-semibold"
-        >
-          Start Matching
-        </Link>
-
-        <Link
-          href="/pubs"
-          className="block w-full rounded-xl app-card px-4 py-3 text-center font-semibold app-text"
-        >
-          Browse Events
-        </Link>
-
-        {/* Date Summary */}
-        <div className="app-card rounded-2xl p-4">
-          <div className="text-sm font-semibold mb-2 app-text">
-            Date Requests
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="app-card rounded-xl p-3">
-              <div className="text-xs app-muted">Incoming</div>
-              <div className="text-lg font-semibold app-text">
-                {incomingCount}
-              </div>
-            </div>
-            <div className="app-card rounded-xl p-3">
-              <div className="text-xs app-muted">Outgoing</div>
-              <div className="text-lg font-semibold app-text">
-                {outgoingCount}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {profile.isAdmin && (
           <Link
-            href="/admin"
-            className="block w-full rounded-xl app-card px-4 py-3 text-center font-semibold app-text"
+            href="/profile"
+            className="absolute top-3 right-3 bg-black/60 text-white rounded-full p-2"
           >
-            Admin Panel
+            ✏️
           </Link>
-        )}
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* NAME BLOCK */}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm px-2 py-0.5 rounded-full app-card">
+                {genderBadge(profile.gender)}
+              </span>
+
+              <div
+                className={`text-2xl font-bold ${
+                  profile.isPremium ? "text-yellow-300" : "app-text"
+                }`}
+              >
+                {profile.name}
+                {age !== null && `, ${age}`}
+              </div>
+
+              {profile.isPremium && (
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                  VIP
+                </span>
+              )}
+
+              <span className={`text-sm font-semibold ${likes.accent}`}>
+                {likes.label}
+              </span>
+
+              {profile.publicId && (
+                <span className="text-xs px-2 py-1 rounded-full app-card app-text">
+                  {profile.publicId}
+                </span>
+              )}
+            </div>
+
+            {/* SUBTITLE */}
+            <div className="text-sm app-muted mt-1">{subtitle}</div>
+
+            <div className="text-sm app-muted mt-1">
+              {countryFlag(profile.nationality)} {profile.nationality} ·{" "}
+              {profile.city}
+            </div>
+          </div>
+
+          {/* ABOUT */}
+          {profile.bio && (
+            <div>
+              <div className="text-sm font-semibold app-text mb-1">About</div>
+              <div className="text-sm app-text">{profile.bio}</div>
+            </div>
+          )}
+
+          {/* INTERESTS */}
+          {profile.interests?.length ? (
+            <div>
+              <div className="text-sm font-semibold app-text mb-2">
+                What I’m into right now
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {profile.interests.map((i) => (
+                  <span
+                    key={i}
+                    className="rounded-full border px-3 py-1 text-xs app-text"
+                  >
+                    {i}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* META */}
+          <div className="text-sm app-muted space-y-1">
+            <div>
+              Date requests left today:{" "}
+              <span className="app-text">
+                {Math.max(0, 10 - (profile.dailyDateCount || 0))}
+              </span>
+            </div>
+            <div>
+              Incoming: <span className="app-text">{incomingCount}</span> ·
+              Outgoing: <span className="app-text">{outgoingCount}</span>
+            </div>
+          </div>
+
+          <Link
+            href="/profile"
+            className="block w-full rounded-xl app-primary px-4 py-3 text-center font-semibold"
+          >
+            Edit Profile
+          </Link>
+        </div>
       </div>
     </PageShell>
   );

@@ -1,32 +1,44 @@
 // lib/types.ts
+import { Timestamp } from "firebase/firestore";
 
 export type UserDoc = {
   uid: string;
-
-  // profile
   name?: string;
+  bio?: string;
   dob?: string;
   gender?: string;
-  city?: string;
-  lookingFor?: string;
-  bio?: string;
   photos?: string[];
 
-  // moderation
-  isBanned?: boolean;
+  publicId?: string;
+
+  isPremium?: boolean;
   isAdmin?: boolean;
+  isBanned?: boolean;
 
-  // wallet
-  coinsA?: number;                 // consumable coins
-  coinBUntil?: any;                // timestamp (premium entitlement)
-
-  // daily limits
+  coinsA?: number;
+  coinBUntil?: any;
   dailyLikeCount?: number;
   lastLikeReset?: any;
   dailyDateCount?: number;
   lastReset?: any;
-
-  // discover
   viewedToday?: string[];
   lastDiscoverReset?: any;
+};
+
+export type DateRequestDoc = {
+  fromUser: string;
+  toUser: string;
+
+  status: "pending" | "accepted" | "declined" | "expired";
+
+  createdAt: Timestamp;
+  respondedAt?: Timestamp;
+
+  seenBySender?: boolean;
+  seenByReceiver?: boolean;
+
+  date?: string;
+  time?: string;
+  place?: string;
+  placeId?: string;
 };
