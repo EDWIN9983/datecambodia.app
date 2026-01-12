@@ -98,6 +98,7 @@ export default function PublicProfilePage() {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [myUid, setMyUid] = useState<string | null>(null);
+  const [slide, setSlide] = useState(0);
 
   useEffect(() => {
     onAuthStateChanged(auth, (u) => {
@@ -135,14 +136,36 @@ export default function PublicProfilePage() {
 
   const likes = likesBadge(user.likesCount || 0);
   const subtitle = subtitleFromInterests(user.interests);
+  const photos = (user.photos || []).slice(0, 5);
 
   return (
     <PageShell title="Profile">
       <div className="space-y-4">
         {/* HERO PHOTO */}
-        <div className="rounded-2xl overflow-hidden app-card">
-          {user.photos?.[0] ? (
-            <img src={user.photos[0]} className="w-full h-[420px] object-cover" />
+        <div className="relative rounded-2xl overflow-hidden app-card">
+          {photos.length > 0 ? (
+            photos.length > 1 ? (
+              <>
+                <img
+                  src={photos[slide]}
+                  className="w-full h-[420px] object-cover"
+                  onClick={() => setSlide((s) => (s + 1) % photos.length)}
+                />
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
+                  {photos.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSlide(i)}
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        i === slide ? "bg-white" : "bg-white/40"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <img src={photos[0]} className="w-full h-[420px] object-cover" />
+            )
           ) : (
             <div className="h-[420px] flex items-center justify-center app-muted text-sm">
               No photo
@@ -152,35 +175,21 @@ export default function PublicProfilePage() {
 
         {/* PROFILE INFO */}
         <div className="rounded-2xl app-card p-4 space-y-3">
-          {/* NAME + TOP BADGES */}
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm px-2 py-0.5 rounded-full app-card">
                 {genderBadge(user.gender)}
               </span>
 
-              <div
-                className={`text-2xl font-bold ${
-                  user.isPremium ? "text-yellow-300" : "app-text"
-                }`}
-              >
+              <div className="text-2xl font-bold app-text">
                 {user.name}
                 {age !== null && `, ${age}`}
               </div>
 
-              {/* VIP badge */}
-              {user.isPremium && (
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                  VIP
-                </span>
-              )}
-
-              {/* Likes near name */}
               <span className={`text-sm font-semibold ${likes.accent}`}>
                 {likes.label}
               </span>
 
-              {/* Public ID near name */}
               {user.publicId && (
                 <span className="text-xs px-2 py-1 rounded-full app-card app-text">
                   {user.publicId}
@@ -188,25 +197,20 @@ export default function PublicProfilePage() {
               )}
             </div>
 
-            {/* Subtitle under name */}
             <div className="text-sm app-muted mt-1">{subtitle}</div>
 
-            {/* Country + City line */}
             <div className="text-sm app-muted mt-1">
               {countryFlag(user.nationality)} {user.nationality} · {user.city}
             </div>
           </div>
 
-          {/* META LINE */}
           <div className="text-xs app-muted flex flex-wrap gap-x-3 gap-y-1">
             {user.lastActive && <span>{formatLastSeen(user.lastActive)}</span>}
             <span>Looking for {user.lookingFor}</span>
           </div>
 
-          {/* ABOUT */}
           {user.bio && <div className="text-sm app-text">{user.bio}</div>}
 
-          {/* BLOCK BUTTON */}
           {myUid && myUid !== user.uid && (
             <button
               onClick={async () => {

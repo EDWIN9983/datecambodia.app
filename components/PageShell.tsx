@@ -11,6 +11,8 @@ import {
   query,
   where,
   limit,
+  doc,
+  getDoc,
 } from "firebase/firestore";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -31,12 +33,10 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
   const router = useRouter();
   const pathname = usePathname();
 
-  /* -----------------------------
-     AUTO-CLOSE SEARCH ON ROUTE CHANGE
-  ------------------------------*/
   useEffect(() => {
     setShowSearchModal(false);
     setSearch("");
+    setOpen(false);
   }, [pathname]);
 
   async function logout() {
@@ -81,6 +81,7 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
 
   /* -----------------------------
      SEARCH BY PUBLIC ID
+     (NO COIN / PREMIUM CHECK)
   ------------------------------*/
   async function runSearch() {
     const v = search.trim();
@@ -136,7 +137,7 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
             {/* MENU */}
             <button
               type="button"
-              onClick={() => setOpen(!open)}
+              onClick={() => setOpen((v) => !v)}
               className="text-xl"
             >
               ☰
@@ -189,21 +190,41 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
 
       {/* HAMBURGER MENU */}
       {open && (
-        <div className="absolute top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow">
+        <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow">
           <nav className="flex flex-col divide-y text-sm">
-            <Link href="/profile" className="px-4 py-3" onClick={() => setOpen(false)}>
+            <Link
+              href="/profile"
+              className="px-4 py-3"
+              onClick={() => setOpen(false)}
+            >
               Profile
             </Link>
-            <Link href="/store" className="px-4 py-3" onClick={() => setOpen(false)}>
+            <Link
+              href="/store"
+              className="px-4 py-3"
+              onClick={() => setOpen(false)}
+            >
               Store
             </Link>
-            <Link href="/settings" className="px-4 py-3" onClick={() => setOpen(false)}>
+            <Link
+              href="/settings"
+              className="px-4 py-3"
+              onClick={() => setOpen(false)}
+            >
               Settings
             </Link>
-            <Link href="/contact" className="px-4 py-3" onClick={() => setOpen(false)}>
+            <Link
+              href="/contact"
+              className="px-4 py-3"
+              onClick={() => setOpen(false)}
+            >
               Contact Us
             </Link>
-            <Link href="/legal" className="px-4 py-3" onClick={() => setOpen(false)}>
+            <Link
+              href="/legal"
+              className="px-4 py-3"
+              onClick={() => setOpen(false)}
+            >
               Info
             </Link>
             <button

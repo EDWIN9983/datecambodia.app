@@ -12,6 +12,7 @@ import {
   where,
   orderBy,
   limit,
+  Timestamp,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/useAuth";
 import { db } from "@/lib/firebase";
@@ -30,6 +31,7 @@ type UserProfile = {
   publicId?: string;
   likesCount?: number;
   isPremium?: boolean;
+  coinBUntil?: any;
   isAdmin?: boolean;
   isBanned?: boolean;
   dailyDateCount?: number;
@@ -98,6 +100,19 @@ export default function HomePage() {
   const [incomingCount, setIncomingCount] = useState(0);
   const [outgoingCount, setOutgoingCount] = useState(0);
 
+  /* 🔒 HOOK ORDER FIX — ALWAYS CALLED */
+  const premiumActive = useMemo(() => {
+    if (!profile?.coinBUntil) return false;
+    const until = profile.coinBUntil;
+    if (until instanceof Timestamp) {
+      return until.toDate().getTime() > Date.now();
+    }
+    if (typeof until?.toDate === "function") {
+      return until.toDate().getTime() > Date.now();
+    }
+    return false;
+  }, [profile?.coinBUntil]);
+
   useEffect(() => {
     if (loading) return;
     if (!user) {
@@ -158,7 +173,6 @@ export default function HomePage() {
   return (
     <PageShell title="My Profile">
       <div className="app-card rounded-2xl overflow-hidden">
-        {/* HERO */}
         <div className="relative h-[320px] bg-gray-200">
           {avatar ? (
             <img src={avatar} className="w-full h-full object-cover" />
@@ -177,7 +191,6 @@ export default function HomePage() {
         </div>
 
         <div className="p-4 space-y-4">
-          {/* NAME BLOCK */}
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm px-2 py-0.5 rounded-full app-card">
@@ -186,14 +199,14 @@ export default function HomePage() {
 
               <div
                 className={`text-2xl font-bold ${
-                  profile.isPremium ? "text-yellow-300" : "app-text"
+                  premiumActive ? "text-yellow-300" : "app-text"
                 }`}
               >
                 {profile.name}
                 {age !== null && `, ${age}`}
               </div>
 
-              {profile.isPremium && (
+              {premiumActive && (
                 <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
                   VIP
                 </span>
@@ -210,7 +223,6 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* SUBTITLE */}
             <div className="text-sm app-muted mt-1">{subtitle}</div>
 
             <div className="text-sm app-muted mt-1">
@@ -219,7 +231,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* ABOUT */}
           {profile.bio && (
             <div>
               <div className="text-sm font-semibold app-text mb-1">About</div>
@@ -227,7 +238,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* INTERESTS */}
           {profile.interests?.length ? (
             <div>
               <div className="text-sm font-semibold app-text mb-2">
@@ -246,7 +256,6 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          {/* META */}
           <div className="text-sm app-muted space-y-1">
             <div>
               Date requests left today:{" "}

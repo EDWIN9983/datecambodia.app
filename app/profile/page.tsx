@@ -17,7 +17,6 @@ const CAMBODIA_CITIES = [
   "Kratie","Stung Treng","Koh Kong","Pailin","Tbong Khmum",
 ];
 
-// 🔹 SHORT-TERM INTEREST CATEGORIES (DATA ONLY)
 const INTEREST_CATEGORIES = [
   {
     key: "social",
@@ -119,7 +118,14 @@ export default function EditProfilePage() {
 
     if (!res.ok) throw new Error("Photo upload failed");
     const data = await res.json();
-    setPhotos((p) => [...p, data.secure_url]);
+    setPhotos((p) => [...p, data.secure_url].slice(0, 5));
+  }
+
+  function setAsProfilePhoto(url: string) {
+    setPhotos((prev) => {
+      const rest = prev.filter((p) => p !== url);
+      return [url, ...rest];
+    });
   }
 
   async function save() {
@@ -156,10 +162,19 @@ export default function EditProfilePage() {
           Edit Profile
         </h1>
 
-        {/* Photos */}
         <div className="flex gap-2 flex-wrap">
           {photos.map((p) => (
-            <img key={p} src={p} className="h-20 w-20 rounded object-cover" />
+            <div key={p} className="relative">
+              <img src={p} className="h-20 w-20 rounded object-cover" />
+              {photos[0] !== p && (
+                <button
+                  onClick={() => setAsProfilePhoto(p)}
+                  className="absolute bottom-1 right-1 text-xs bg-black/60 text-white rounded px-1"
+                >
+                  Set
+                </button>
+              )}
+            </div>
           ))}
         </div>
 
@@ -192,7 +207,6 @@ export default function EditProfilePage() {
           onChange={(e) => setBio(e.target.value)}
         />
 
-        {/* 🔥 INTERESTS */}
         <div className="space-y-3">
           <div className="text-sm font-semibold app-text">
             What I’m into right now

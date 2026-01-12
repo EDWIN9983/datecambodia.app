@@ -1,5 +1,9 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 
@@ -14,6 +18,15 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
+/**
+ * AUTH — MUST BE INITIALIZED ONCE
+ * PERSISTENCE MUST BE SET BEFORE ANY LISTENERS
+ */
 export const auth = getAuth(app);
+
+setPersistence(auth, browserLocalPersistence).catch(() => {
+  // ignore — prevents crash in dev / SSR
+});
+
 export const db = getFirestore(app);
-export const functions = getFunctions(undefined, "us-central1");
+export const functions = getFunctions(app, "us-central1");

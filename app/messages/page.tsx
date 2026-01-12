@@ -75,7 +75,7 @@ export default function MessagesPage() {
         return;
       }
 
-      setMe({ uid: user.uid, ...(snap.data() as UserDoc) });
+      setMe(snap.data() as UserDoc);
     });
 
     return () => unsub();
@@ -109,7 +109,7 @@ function MessagesInner({ me }: { me: UserDoc }) {
   async function fetchUser(uid: string) {
     const snap = await getDoc(doc(db, "users", uid));
     if (!snap.exists()) return null;
-    const u = { uid, ...(snap.data() as UserDoc) } as UserDoc;
+    const u = snap.data() as UserDoc;
     if (u.isBanned) return null;
     return u;
   }
