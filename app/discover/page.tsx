@@ -1,4 +1,3 @@
-// app/discover/page.tsx
 "use client";
 
 import PageShell from "@/components/PageShell";
@@ -14,7 +13,7 @@ import type { UserDoc } from "@/lib/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -84,6 +83,13 @@ function DiscoverInner({ me }: { me: UserDoc }) {
   const placeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<any>(null);
 
+  /* ✅ PREMIUM DERIVED FROM COINB (coinBUntil) */
+  const premiumActive = useMemo(() => {
+    if (!me.coinBUntil) return false;
+    if (!(me.coinBUntil instanceof Timestamp)) return false;
+    return me.coinBUntil.toDate().getTime() > Date.now();
+  }, [me.coinBUntil]);
+
   useEffect(() => {
     (async () => {
       const blockedIds = await getBlockedUserIds(me.uid);
@@ -136,7 +142,7 @@ function DiscoverInner({ me }: { me: UserDoc }) {
   }
 
   function goBack() {
-    if (!me.isPremium) return;
+    if (!premiumActive) return;
     const prev = history[history.length - 1];
     if (!prev) return;
     setHistory((h) => h.slice(0, -1));
@@ -231,9 +237,7 @@ function DiscoverInner({ me }: { me: UserDoc }) {
                 value={date}
                 onChange={(e) => {
                   setDate(e.target.value);
-                  if (e.target.value === todayISO()) {
-                    setTime("");
-                  }
+                  if (e.target.value === todayISO()) setTime("");
                 }}
               />
 
@@ -277,7 +281,7 @@ function DiscoverInner({ me }: { me: UserDoc }) {
 
           <div className="mt-4 grid grid-cols-4 gap-3">
             <button
-              disabled={!me.isPremium || busy}
+              disabled={!premiumActive || busy}
               onClick={goBack}
               className="rounded-xl app-card px-4 py-3 font-semibold app-text disabled:opacity-40"
             >

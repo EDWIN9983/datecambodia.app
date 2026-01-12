@@ -38,6 +38,12 @@ type SettingsUser = {
   deactivatedAt?: any;
 };
 
+type BlockedView = {
+  uid: string;
+  name?: string;
+  publicId?: string;
+};
+
 function maskPhone(p?: string) {
   if (!p) return "";
   if (p.length <= 6) return p;
@@ -85,9 +91,16 @@ export default function SettingsPage() {
 
   // Blocked users
   const [blocked, setBlocked] = useState<string[]>([]);
+  const [showBlocked, setShowBlocked] = useState(false);
+
+  // ✅ ONLY ADDITION: resolved display data (Name + Public ID)
+  const [blockedView, setBlockedView] = useState<BlockedView[]>([]);
 
   const authedUser = auth.currentUser;
-  const googleLinked = useMemo(() => isGoogleLinked(authedUser), [authedUser?.uid, authedUser?.providerData]);
+  const googleLinked = useMemo(
+    () => isGoogleLinked(authedUser),
+    [authedUser?.uid, authedUser?.providerData]
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -121,6 +134,37 @@ export default function SettingsPage() {
 
     return () => unsub();
   }, [router]);
+
+  // ✅ ONLY ADDITION: resolve blocked uid -> {name, publicId} for display
+  useEffect(() => {
+    async function resolveBlocked() {
+      if (!blocked || blocked.length === 0) {
+        setBlockedView([]);
+        return;
+      }
+
+      try {
+        const snaps = await Promise.all(
+          blocked.map(async (id) => {
+            try {
+              const s = await getDoc(doc(db, "users", id));
+              if (!s.exists()) return { uid: id } as BlockedView;
+              const d: any = s.data();
+              return { uid: id, name: d?.name, publicId: d?.publicId } as BlockedView;
+            } catch {
+              return { uid: id } as BlockedView;
+            }
+          })
+        );
+
+        setBlockedView(snaps);
+      } catch {
+        setBlockedView(blocked.map((id) => ({ uid: id })));
+      }
+    }
+
+    resolveBlocked();
+  }, [blocked]);
 
   useEffect(() => {
     if (!toast) return;
@@ -344,7 +388,9 @@ export default function SettingsPage() {
 
   if (loading || !uid || !me) return null;
 
-  const createdText = me.createdAt?.toDate ? me.createdAt.toDate().toLocaleDateString() : "";
+  const createdText = me.createdAt?.toDate
+    ? me.createdAt.toDate().toLocaleDateString()
+    : "";
 
   return (
     <PageShell title="Settings">
@@ -359,7 +405,8 @@ export default function SettingsPage() {
             </div>
             {me.publicId && (
               <div>
-                <span className="font-medium app-text">Public ID:</span> {me.publicId}
+                <span className="font-medium app-text">Public ID:</span>{" "}
+                {me.publicId}
               </div>
             )}
             {me.name && (
@@ -369,7 +416,8 @@ export default function SettingsPage() {
             )}
             {createdText && (
               <div>
-                <span className="font-medium app-text">Created:</span> {createdText}
+                <span className="font-medium app-text">Created:</span>{" "}
+                {createdText}
               </div>
             )}
           </div>
@@ -380,7 +428,11 @@ export default function SettingsPage() {
           <div className="text-sm font-semibold app-text">Phone Number</div>
 
           <div className="text-sm app-muted">
-            Current: <span className="app-text font-medium">{maskPhone(me.phone || auth.currentUser?.phoneNumber || "") || "Not set"}</span>
+            Current:{" "}
+            <span className="app-text font-medium">
+              {maskPhone(me.phone || auth.currentUser?.phoneNumber || "") ||
+                "Not set"}
+            </span>
           </div>
 
           {phoneStage === "idle" ? (
@@ -443,7 +495,9 @@ export default function SettingsPage() {
           <div className="text-sm app-muted">
             Status:{" "}
             <span className="app-text font-medium">
-              {googleLinked ? `Linked (${auth.currentUser?.email || "email"})` : "Not linked"}
+              {googleLinked
+                ? `Linked (${auth.currentUser?.email || "email"})`
+                : "Not linked"}
             </span>
           </div>
 
@@ -497,13 +551,16 @@ export default function SettingsPage() {
           </button>
 
           <div className="text-xs app-muted">
-            (This only saves your preference. It does not change other pages yet.)
+            (This only saves your preference. It does not change other pages
+            yet.)
           </div>
         </div>
 
         {/* ONE-TIME NAME CHANGE */}
         <div className="app-card rounded-2xl p-4 space-y-3">
-          <div className="text-sm font-semibold app-text">Name Change (One-time)</div>
+          <div className="text-sm font-semibold app-text">
+            Name Change (One-time)
+          </div>
 
           <input
             value={newName}
@@ -518,7 +575,11 @@ export default function SettingsPage() {
             disabled={savingName || !!me.usernameChangeUsed}
             className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
           >
-            {me.usernameChangeUsed ? "Already used" : savingName ? "Updating..." : "Update name"}
+            {me.usernameChangeUsed
+              ? "Already used"
+              : savingName
+              ? "Updating..."
+              : "Update name"}
           </button>
 
           <div className="text-xs app-muted">
@@ -528,25 +589,40 @@ export default function SettingsPage() {
 
         {/* BLOCKED USERS */}
         <div className="app-card rounded-2xl p-4 space-y-3">
-          <div className="text-sm font-semibold app-text">Blocked users</div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold app-text">Blocked users</div>
 
-          {blocked.length === 0 ? (
-            <div className="text-sm app-muted">No blocked users</div>
-          ) : (
-            blocked.map((id) => (
-              <div key={id} className="flex justify-between items-center">
-                <span className="text-sm app-text">{id}</span>
-                <button
-                  onClick={async () => {
-                    await unblockUser(uid!, id);
-                    setBlocked((b) => b.filter((x) => x !== id));
-                  }}
-                  className="text-xs text-red-500 font-semibold"
-                >
-                  Unblock
-                </button>
-              </div>
-            ))
+            <button
+              onClick={() => setShowBlocked((v) => !v)}
+              className="text-xs font-semibold app-text"
+            >
+              {showBlocked ? "Hide" : `View (${blocked.length})`}
+            </button>
+          </div>
+
+          {showBlocked && (
+            blockedView.length === 0 ? (
+              <div className="text-sm app-muted">No blocked users</div>
+            ) : (
+              blockedView.map((u) => (
+                <div key={u.uid} className="flex justify-between items-center">
+                  <span className="text-sm app-text">
+                    {u.name ? u.name : "User"}
+                    {u.publicId ? ` (${u.publicId})` : ""}
+                  </span>
+
+                  <button
+                    onClick={async () => {
+                      await unblockUser(uid!, u.uid);
+                      setBlocked((b) => b.filter((x) => x !== u.uid));
+                    }}
+                    className="text-xs text-red-500 font-semibold"
+                  >
+                    Unblock
+                  </button>
+                </div>
+              ))
+            )
           )}
         </div>
 

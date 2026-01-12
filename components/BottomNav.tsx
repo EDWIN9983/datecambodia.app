@@ -15,7 +15,7 @@ import {
 
 const tabs = [
   { href: "/home", label: "Home", icon: "🏠" },
-  { href: "/discover", label: "Discover", icon: "🔍" },
+  { href: "/discover", label: "Discover", icon: "💋" },
   { href: "/dates", label: "Dates", icon: "📅" },
   { href: "/messages", label: "Message", icon: "💬" },
   { href: "/pubs", label: "Pubs", icon: "🎉" },
