@@ -8,21 +8,36 @@ import {
   query,
   where,
   Timestamp,
-  collection as col,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-type AdminSectionProps = {
-  title: string;
-  children: React.ReactNode;
+type UserResult = {
+  uid: string;
+  name?: string;
+  publicId?: string;
+  gender?: string;
+  phone?: string;
+  isBanned?: boolean;
+  coinBUntil?: any;
+  coinsA?: number;
+  isVerified?: boolean;
 };
 
-function Section({ title, children }: AdminSectionProps) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border p-5 bg-white shadow-sm">
-      <div className="text-sm font-semibold text-gray-900">{title}</div>
+      <div className="text-sm font-semibold">{title}</div>
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-lg font-semibold">{value ?? "—"}</div>
+    </div>
   );
 }
 
@@ -38,6 +53,31 @@ export default function AdminPage() {
   const [totalLikes, setTotalLikes] = useState<number | null>(null);
   const [acceptedDates, setAcceptedDates] = useState<number | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState<UserResult[]>([]);
+  const [userDoc, setUserDoc] = useState<UserResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState<any>({});
+
+  const [premiumDays, setPremiumDays] = useState(7);
+  const [coinsAmount, setCoinsAmount] = useState(0);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<null | (() => void)>(null);
+
+  const [filters, setFilters] = useState({
+    premium: null as boolean | null,
+    gender: null as "male" | "female" | null,
+    hasPhone: null as boolean | null,
+    banned: null as boolean | null,
+    newJoin: null as "today" | "7d" | null,
+    verified: null as boolean | null,
+  });
+  const [list, setList] = useState<any[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+
   const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 
   function handleSubmit() {
@@ -49,145 +89,272 @@ export default function AdminPage() {
     }
   }
 
+  function requireConfirm(action: () => void) {
+    setPendingAction(() => action);
+    setConfirmOpen(true);
+  }
+
+  async function loadList() {
+    setListLoading(true);
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "list",
+          ...filters,
+          adminPassword: password,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch users");
+
+      const data = await res.json();
+      setList(data.users || []);
+    } catch {
+      setList([]);
+    } finally {
+      setListLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!authorized) return;
-
     async function loadStats() {
       const usersCol = collection(db, "users");
-
       const now = new Date();
-      const startOfToday = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
-      const todayTs = Timestamp.fromDate(startOfToday);
+      const today = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
 
-      const totalSnap = await getCountFromServer(usersCol);
-      setTotalUsers(totalSnap.data().count);
+      setTotalUsers((await getCountFromServer(usersCol)).data().count);
+      setNewUsersToday((await getCountFromServer(query(usersCol, where("createdAt", ">=", today)))).data().count);
+      setActiveToday((await getCountFromServer(query(usersCol, where("lastActive", ">=", today)))).data().count);
+      setPremiumUsers((await getCountFromServer(query(usersCol, where("coinBUntil", ">", Timestamp.now())))).data().count);
 
-      const newTodaySnap = await getCountFromServer(
-        query(usersCol, where("createdAt", ">=", todayTs))
-      );
-      setNewUsersToday(newTodaySnap.data().count);
-
-      const activeSnap = await getCountFromServer(
-        query(usersCol, where("lastActive", ">=", todayTs))
-      );
-      setActiveToday(activeSnap.data().count);
-
-      const premiumSnap = await getCountFromServer(
-        query(usersCol, where("isPremium", "==", true))
-      );
-      setPremiumUsers(premiumSnap.data().count);
-
-      let likesSum = 0;
-      const likesDocs = await getDocs(usersCol);
-      likesDocs.forEach((doc) => {
-        const data = doc.data();
-        if (typeof data.likesCount === "number") {
-          likesSum += data.likesCount;
-        }
+      let likes = 0;
+      (await getDocs(usersCol)).forEach((d) => {
+        likes += d.data().likesCount || 0;
       });
-      setTotalLikes(likesSum);
+      setTotalLikes(likes);
 
-      const datesCol = col(db, "dateRequests");
-
-      const acceptedSnap = await getCountFromServer(
-        query(datesCol, where("respondedAt", "!=", null))
+      setAcceptedDates(
+        (await getCountFromServer(query(collection(db, "dateRequests"), where("respondedAt", "!=", null)))).data().count
       );
-      setAcceptedDates(acceptedSnap.data().count);
     }
-
     loadStats();
   }, [authorized]);
+
+  async function handleSearch() {
+    if (!search.trim()) return;
+    setLoading(true);
+    setResults([]);
+    setUserDoc(null);
+
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "search", search, adminPassword: password }),
+    });
+    const data = await res.json();
+    if (data?.user) {
+      setResults([data.user]);
+      setUserDoc(data.user);
+    }
+    setLoading(false);
+  }
+
+  async function handleBanToggle(banned: boolean) {
+    if (!userDoc) return;
+    await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ban", uid: userDoc.uid, banned, adminPassword: password }),
+    });
+    setUserDoc({ ...userDoc, isBanned: banned });
+  }
+
+  function startEdit() {
+    setEditData(userDoc);
+    setEditMode(true);
+  }
+
+  async function applyEdit() {
+    const { uid, ...updates } = editData;
+    await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update", uid, updates, adminPassword: password }),
+    });
+    setUserDoc(editData);
+    setEditMode(false);
+  }
+
+  async function applyPremium() {
+    if (!userDoc?.uid) return;
+    const until = new Date();
+    until.setDate(until.getDate() + premiumDays);
+    await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "premium", uid: userDoc.uid, until, adminPassword: password }),
+    });
+    setUserDoc({ ...userDoc, coinBUntil: until });
+  }
+
+  async function applyCoins() {
+    if (!userDoc?.uid) return;
+    await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "coins", uid: userDoc.uid, coins: coinsAmount, adminPassword: password }),
+    });
+    setUserDoc({ ...userDoc, coinsA: coinsAmount });
+  }
 
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="w-full max-w-sm rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-lg font-semibold text-gray-900">
-            Admin Access
-          </div>
-
+        <div className="rounded-xl border bg-white p-6 w-full max-w-sm">
           <input
             type="password"
+            placeholder="Admin password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter admin password"
-            className="mt-4 w-full rounded-xl border px-3 py-2 text-sm text-gray-900"
+            className="w-full border rounded-xl px-3 py-2"
           />
-
-          {error && (
-            <div className="mt-2 text-xs text-red-600">
-              Incorrect password
-            </div>
-          )}
-
-          <button
-            onClick={handleSubmit}
-            className="mt-4 w-full rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm"
-          >
-            Enter
-          </button>
+          {error && <div className="text-red-600 text-xs mt-2">Wrong password</div>}
+          <button onClick={handleSubmit} className="mt-4 w-full border rounded-xl py-2">Enter</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="mx-auto max-w-6xl px-6 py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <div className="text-xl font-semibold text-gray-900">
-              Admin Command Console
-            </div>
-            <div className="mt-1 text-sm text-gray-600">
-              Password-protected admin panel
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-100 p-6 space-y-6">
+      <Section title="System Status">
+        <div className="grid grid-cols-6 gap-3">
+          <Stat label="Total Users" value={totalUsers} />
+          <Stat label="New Today" value={newUsersToday} />
+          <Stat label="Active Today" value={activeToday} />
+          <Stat label="Premium" value={premiumUsers} />
+          <Stat label="Likes" value={totalLikes} />
+          <Stat label="Dates Accepted" value={acceptedDates} />
+        </div>
+      </Section>
 
-          <button
-            onClick={() => setAuthorized(false)}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm"
+      <Section title="User Filters (Read-only)">
+        <div className="grid grid-cols-6 gap-2">
+          <select onChange={e => setFilters(f => ({...f, premium: e.target.value === "" ? null : e.target.value === "true"}))} className="rounded-xl border p-2 text-sm">
+            <option value="">Premium</option><option value="true">Yes</option><option value="false">No</option>
+          </select>
+          <select
+            onChange={e =>
+              setFilters(f => ({
+                ...f,
+                gender: (e.target.value === "" ? null : (e.target.value as "male" | "female")),
+              }))
+            }
+            className="rounded-xl border p-2 text-sm"
           >
-            Exit
-          </button>
+            <option value="">Gender</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+          <select onChange={e => setFilters(f => ({...f, hasPhone: e.target.value === "" ? null : e.target.value === "true"}))} className="rounded-xl border p-2 text-sm">
+            <option value="">Phone</option><option value="true">Has</option><option value="false">No</option>
+          </select>
+          <select onChange={e => setFilters(f => ({...f, banned: e.target.value === "" ? null : e.target.value === "true"}))} className="rounded-xl border p-2 text-sm">
+            <option value="">Status</option><option value="false">Active</option><option value="true">Banned</option>
+          </select>
+          <select
+            onChange={e =>
+              setFilters(f => ({
+                ...f,
+                newJoin: (e.target.value === "" ? null : (e.target.value as "today" | "7d")),
+              }))
+            }
+            className="rounded-xl border p-2 text-sm"
+          >
+            <option value="">Joined</option>
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+          </select>
+          <button onClick={loadList} className="rounded-xl border px-4 py-2 text-sm font-semibold">Apply</button>
+        </div>
+      </Section>
+
+      <Section title="Users List">
+        {listLoading && <div className="text-sm text-gray-500">Loading…</div>}
+        <div className="divide-y">
+          {list.map(u => (
+            <button key={u.uid} onClick={() => setUserDoc(u)} className="w-full text-left p-3 hover:bg-gray-50">
+              <div className="font-semibold">{u.name || "—"} <span className="text-xs text-gray-500">{u.publicId || ""}</span></div>
+              <div className="text-xs text-gray-500">{u.gender || "—"} · {u.phone ? "Has phone" : "No phone"}</div>
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="User Search">
+        <div className="flex gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 border rounded-xl px-3 py-2"
+            placeholder="UID / PublicID / Name / ChatID"
+          />
+          <button onClick={handleSearch} className="border rounded-xl px-4">Search</button>
         </div>
 
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12">
-            <Section title="System Status">
-              <div className="grid grid-cols-6 gap-3">
-                <Stat label="Total Users" value={totalUsers} />
-                <Stat label="New Users (Today)" value={newUsersToday} />
-                <Stat label="Active (Today)" value={activeToday} />
-                <Stat label="Premium Users" value={premiumUsers} />
-                <Stat label="Likes (Total)" value={totalLikes} />
-                <Stat label="Dates Accepted" value={acceptedDates} />
-              </div>
-            </Section>
+        {loading && <div className="mt-3 text-sm">Searching…</div>}
+
+        {userDoc && (
+          <div className="mt-4 space-y-3">
+            {!editMode ? (
+              <>
+                <pre className="bg-gray-50 p-4 rounded-xl text-xs overflow-x-auto">{JSON.stringify(userDoc, null, 2)}</pre>
+                <div className="flex gap-2">
+                  <button onClick={startEdit} className="border rounded-xl px-4 py-2">Edit</button>
+                  <button onClick={() => requireConfirm(() => handleBanToggle(!userDoc.isBanned))} className="border rounded-xl px-4 py-2">{userDoc.isBanned ? "Unban" : "Ban"}</button>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <div className="flex gap-2 items-center">
+                    <input type="number" value={premiumDays} onChange={(e) => setPremiumDays(Number(e.target.value))} className="w-24 rounded-xl border px-2 py-1 text-sm"/>
+                    <button onClick={() => requireConfirm(applyPremium)} className="rounded-xl border px-4 py-2 text-sm font-semibold">Grant Premium (days)</button>
+                  </div>
+
+                  <div className="flex gap-2 items-center">
+                    <input type="number" value={coinsAmount} onChange={(e) => setCoinsAmount(Number(e.target.value))} className="w-24 rounded-xl border px-2 py-1 text-sm"/>
+                    <button onClick={() => requireConfirm(applyCoins)} className="rounded-xl border px-4 py-2 text-sm font-semibold">Set Coins</button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <textarea value={JSON.stringify(editData, null, 2)} onChange={(e) => setEditData(JSON.parse(e.target.value))} className="w-full h-80 border rounded-xl p-3 font-mono text-xs"/>
+                <div className="flex gap-2">
+                  <button onClick={() => requireConfirm(applyEdit)} className="border rounded-xl px-4 py-2">Apply</button>
+                  <button onClick={() => setEditMode(false)} className="border rounded-xl px-4 py-2">Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <div className="text-sm font-semibold text-gray-900">Confirm Admin Password</div>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-4 w-full rounded-xl border px-3 py-2 text-sm" placeholder="Re-enter admin password"/>
+            <div className="mt-4 flex gap-2 justify-end">
+              <button onClick={() => setConfirmOpen(false)} className="rounded-xl border px-4 py-2 text-sm">Cancel</button>
+              <button onClick={() => { pendingAction?.(); setConfirmOpen(false); }} className="rounded-xl border px-4 py-2 text-sm font-semibold">Confirm</button>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | null;
-}) {
-  return (
-    <div className="rounded-xl border bg-white p-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-gray-900">
-        {value ?? "—"}
-      </div>
+      )}
     </div>
   );
 }
