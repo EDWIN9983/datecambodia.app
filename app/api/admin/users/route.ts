@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 if (!getApps().length) {
   initializeApp({
@@ -14,133 +14,80 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-function unauthorized() {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-}
+type UserDoc = {
+  uid: string;
+  name?: string;
+  publicId?: string;
+  gender?: string;
+  phone?: string;
+  isBanned?: boolean;
+  isPremium?: boolean;
+  likesCount?: number;
+  createdAt?: Timestamp;
+  lastActive?: Timestamp;
+  coinBUntil?: Timestamp;
+};
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { adminPassword, action, search, updates, uid, banned } = body;
+  const { action, adminPassword } = body;
 
   if (adminPassword !== process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-    return unauthorized();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  /* ======================
-     🔍 SEARCH USER
-     ====================== */
-  if (action === "search") {
-    let userDoc: any = null;
+  /* ======================= STATS ======================= */
+  if (action === "stats") {
+    const usersCol = db.collection("users");
 
-    const byUid = await db.collection("users").doc(search).get();
-    if (byUid.exists) {
-      userDoc = { uid: byUid.id, ...byUid.data() };
-    }
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
 
-    if (!userDoc) {
-      const snap = await db
-        .collection("users")
-        .where("publicId", "==", search)
-        .limit(1)
-        .get();
+    const totalUsers = (await usersCol.count().get()).data().count;
 
-      if (!snap.empty) {
-        const d = snap.docs[0];
-        userDoc = { uid: d.id, ...d.data() };
+    const newToday = (
+      await usersCol.where("createdAt", ">=", startOfToday).count().get()
+    ).data().count;
+
+    const activeToday = (
+      await usersCol.where("lastActive", ">=", startOfToday).count().get()
+    ).data().count;
+
+    const premiumUsers = (
+      await usersCol.where("coinBUntil", ">", now).count().get()
+    ).data().count;
+
+    let totalLikes = 0;
+    const usersSnap = await usersCol.get();
+    usersSnap.forEach(d => {
+      if (typeof d.data().likesCount === "number") {
+        totalLikes += d.data().likesCount;
       }
-    }
-
-    if (!userDoc) {
-      const snap = await db
-        .collection("users")
-        .where("name", "==", search)
-        .limit(1)
-        .get();
-
-      if (!snap.empty) {
-        const d = snap.docs[0];
-        userDoc = { uid: d.id, ...d.data() };
-      }
-    }
-
-    if (!userDoc) {
-      const chat = await db.collection("chats").doc(search).get();
-      if (chat.exists) {
-        const users = chat.data()?.users || [];
-        if (users[0]) {
-          const u = await db.collection("users").doc(users[0]).get();
-          if (u.exists) {
-            userDoc = { uid: u.id, ...u.data() };
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({ user: userDoc });
-  }
-
-  /* ======================
-     ✏️ UPDATE USER
-     ====================== */
-  if (action === "update") {
-    if (!uid || !updates) {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
-    }
-
-    await db.collection("users").doc(uid).update(updates);
-    return NextResponse.json({ success: true });
-  }
-
-  /* ======================
-     🚫 BAN / UNBAN USER
-     ====================== */
-  if (action === "ban") {
-    if (!uid || typeof banned !== "boolean") {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
-    }
-
-    await db.collection("users").doc(uid).update({
-      isBanned: banned,
     });
 
-    return NextResponse.json({ success: true });
-  }
+    const acceptedDates = (
+      await db
+        .collection("dateRequests")
+        .where("respondedAt", "!=", null)
+        .count()
+        .get()
+    ).data().count;
 
-  /* ======================
-     ⭐ PREMIUM (coinBUntil)
-     ====================== */
-  if (action === "premium") {
-    const { uid, until } = body;
-    if (!uid || !until) {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
-    }
-
-    await db.collection("users").doc(uid).update({
-      coinBUntil: new Date(until),
+    return NextResponse.json({
+      totalUsers,
+      newToday,
+      activeToday,
+      premiumUsers,
+      totalLikes,
+      acceptedDates,
     });
-
-    return NextResponse.json({ success: true });
   }
 
-  /* ======================
-     🪙 ADD COINS
-     ====================== */
-  if (action === "coins") {
-    const { uid, coins } = body;
-    if (!uid || typeof coins !== "number") {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
-    }
-
-    await db.collection("users").doc(uid).update({
-      coinsA: coins,
-    });
-
-    return NextResponse.json({ success: true });
-  }
-
-  /* ======================
-     📋 LIST USERS WITH FILTERS (READ-ONLY)
-     ====================== */
+  /* ======================= USER LIST ======================= */
   if (action === "list") {
     const {
       premium,
@@ -152,29 +99,42 @@ export async function POST(req: NextRequest) {
       limit = 50,
     } = body;
 
-    let q: FirebaseFirestore.Query = db.collection("users");
+    let q = db.collection("users") as FirebaseFirestore.Query;
 
-    if (typeof banned === "boolean") q = q.where("isBanned", "==", banned);
-    if (gender) q = q.where("gender", "==", gender);
-    if (typeof hasPhone === "boolean") {
-      q = hasPhone ? q.where("phone", "!=", "") : q.where("phone", "==", "");
+    if (typeof banned === "boolean") {
+      q = q.where("isBanned", "==", banned);
     }
-    if (typeof verified === "boolean") q = q.where("isVerified", "==", verified);
+
+    if (gender) {
+      q = q.where("gender", "==", gender);
+    }
+
+    if (typeof hasPhone === "boolean") {
+      q = hasPhone
+        ? q.where("phone", "!=", "")
+        : q.where("phone", "==", "");
+    }
+
+    if (verified === true) {
+      q = q.where("phoneVerified", "==", true);
+    }
 
     if (newJoin) {
       const now = new Date();
-      let from = new Date();
-      if (newJoin === "today") {
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      }
-      if (newJoin === "7d") {
-        from.setDate(now.getDate() - 7);
-      }
+      const from =
+        newJoin === "today"
+          ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
       q = q.where("createdAt", ">=", from);
     }
 
     const snap = await q.limit(limit).get();
-    let users = snap.docs.map(d => ({ uid: d.id, ...d.data() })) as any[];
+
+    let users: UserDoc[] = snap.docs.map(d => ({
+      uid: d.id,
+      ...(d.data() as Omit<UserDoc, "uid">),
+    }));
 
     if (typeof premium === "boolean") {
       const now = new Date();
@@ -184,6 +144,38 @@ export async function POST(req: NextRequest) {
           : !u.coinBUntil || u.coinBUntil.toDate() <= now
       );
     }
+
+    return NextResponse.json({ users });
+  }
+
+  /* ======================= SEARCH ======================= */
+  if (action === "search") {
+    const { query } = body;
+
+    if (!query || typeof query !== "string") {
+      return NextResponse.json({ users: [] });
+    }
+
+    let snap;
+
+    if (query.startsWith("#")) {
+      snap = await db
+        .collection("users")
+        .where("publicId", "==", query.replace("#", ""))
+        .limit(1)
+        .get();
+    } else {
+      snap = await db
+        .collection("users")
+        .where("name", "==", query)
+        .limit(10)
+        .get();
+    }
+
+    const users: UserDoc[] = snap.docs.map(d => ({
+      uid: d.id,
+      ...(d.data() as Omit<UserDoc, "uid">),
+    }));
 
     return NextResponse.json({ users });
   }
