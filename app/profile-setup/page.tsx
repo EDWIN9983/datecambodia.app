@@ -14,6 +14,7 @@ import {
   where,
   getDocs,
   Timestamp,
+  addDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
@@ -33,12 +34,6 @@ const CAMBODIA_CITIES = [
   "Kratie","Stung Treng","Koh Kong","Pailin","Tbong Khmum",
 ];
 
-const INTERESTS = [
-  "Music","Travel","Coffee","Food","Movies","Fitness","Nightlife","Gaming",
-  "Nature","Business","Art","Sports","Pets","Shopping","Photography",
-  "Cooking","Reading","Karaoke","Beach","Hiking",
-];
-
 function calcAge(dob: string) {
   const birth = new Date(dob);
   const today = new Date();
@@ -54,8 +49,12 @@ function maxAdultDate() {
   return d.toISOString().split("T")[0];
 }
 
-function padId(n: number) {
-  return `#${String(n).padStart(5, "0")}`;
+function generatePublicId(n: number) {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const a = letters[Math.floor(Math.random() * 26)];
+  const b = letters[Math.floor(Math.random() * 26)];
+  const c = letters[Math.floor(Math.random() * 26)];
+  return `#${a}${b}${c}${String(n).padStart(6, "0")}`;
 }
 
 async function getAdminDefaults() {
@@ -86,6 +85,38 @@ async function getAdminDefaults() {
   }
 }
 
+/* ===========================
+   🔔 NOTIFICATION HELPERS
+=========================== */
+
+async function notifyCoins(uid: string, amount: number) {
+  if (!amount || amount <= 0) return;
+
+  await addDoc(collection(db, "notifications"), {
+    toUid: uid,
+    type: "coins",
+    title: "Pulses Added 🎁",
+    body: `You received ${amount} pulses.`,
+    createdAt: serverTimestamp(),
+    read: false,
+  });
+}
+
+async function notifyPremium(uid: string, until: Timestamp) {
+  if (!until) return;
+
+  const end = until.toDate().toLocaleString();
+
+  await addDoc(collection(db, "notifications"), {
+    toUid: uid,
+    type: "premium",
+    title: "Premium Activated ❤️",
+    body: `Your premium is active until ${end}.`,
+    createdAt: serverTimestamp(),
+    read: false,
+  });
+}
+
 export default function ProfileSetupPage() {
   const router = useRouter();
 
@@ -100,9 +131,10 @@ export default function ProfileSetupPage() {
   const [city, setCity] = useState("");
 
   const [bio, setBio] = useState("");
-  const [interests, setInterests] = useState<string[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [installShortcut, setInstallShortcut] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -117,10 +149,9 @@ export default function ProfileSetupPage() {
     if (!city) return false;
     if (!photoFile) return false;
     if (!bio.trim()) return false;
-    if (interests.length < 1) return false;
     if (!ageConfirmed) return false;
     return true;
-  }, [uid, name, dob, age, nationality, city, photoFile, bio, interests, ageConfirmed]);
+  }, [uid, name, dob, age, nationality, city, photoFile, bio, ageConfirmed]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -144,14 +175,6 @@ export default function ProfileSetupPage() {
 
     return () => unsub();
   }, [router]);
-
-  function toggleInterest(label: string) {
-    setInterests((prev) =>
-      prev.includes(label)
-        ? prev.filter((x) => x !== label)
-        : [...prev, label].slice(0, 10)
-    );
-  }
 
   async function uploadPhoto(file: File): Promise<string> {
     const form = new FormData();
@@ -192,7 +215,7 @@ export default function ProfileSetupPage() {
         const last = counterSnap.exists() ? counterSnap.data().last || 0 : 0;
         const next = last + 1;
         tx.set(counterRef, { last: next }, { merge: true });
-        return padId(next);
+        return generatePublicId(next);
       });
 
       const photoUrl = await uploadPhoto(photoFile!);
@@ -218,10 +241,9 @@ export default function ProfileSetupPage() {
           lookingFor,
           city,
           bio: bio.trim(),
-          interests,
           photos: [photoUrl],
           isAdmin: false,
-          isPremium: false,
+          isPremium: !!coinBUntil,
           isBanned: false,
           coinsA: defaults.defaultCoinsA,
           dailyLikeCount: defaults.defaultDailyLikeCount,
@@ -233,6 +255,14 @@ export default function ProfileSetupPage() {
         },
         { merge: true }
       );
+
+      // 🔔 NOTIFICATIONS (ONLY HERE, ONLY ON MUTATION)
+      await notifyCoins(uid, defaults.defaultCoinsA);
+      if (coinBUntil) await notifyPremium(uid, coinBUntil);
+
+      if (installShortcut && (window as any).deferredPrompt) {
+        (window as any).deferredPrompt.prompt();
+      }
 
       await fetch("/api/signup-reward", {
         method: "POST",
@@ -346,22 +376,6 @@ export default function ProfileSetupPage() {
           onChange={(e) => setBio(e.target.value)}
         />
 
-        <div className="mb-3">
-          <div className="text-sm font-semibold mb-2">Interests (max 10)</div>
-          <div className="grid grid-cols-2 gap-2">
-            {INTERESTS.map((label) => (
-              <label key={label} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={interests.includes(label)}
-                  onChange={() => toggleInterest(label)}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-
         <label className="flex items-center gap-2 mb-3 text-sm">
           <input
             type="checkbox"
@@ -369,6 +383,15 @@ export default function ProfileSetupPage() {
             onChange={(e) => setAgeConfirmed(e.target.checked)}
           />
           I confirm I am 18+
+        </label>
+
+        <label className="flex items-center gap-2 mb-3 text-sm">
+          <input
+            type="checkbox"
+            checked={installShortcut}
+            onChange={(e) => setInstallShortcut(e.target.checked)}
+          />
+          Add DateCambodia to my phone home screen
         </label>
 
         {error && <div className="text-sm text-red-400 mb-3">{error}</div>}

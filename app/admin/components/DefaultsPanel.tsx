@@ -31,7 +31,7 @@ export default function DefaultsPanel() {
   const [premiumDailyDateCount, setPremiumDailyDateCount] = useState(0);
 
   async function loadDefaults() {
-    const res = await fetch("/api/admin/defaults", {
+    const res = await fetch("/api/admin/default", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -64,7 +64,7 @@ export default function DefaultsPanel() {
 
   async function saveDefaults() {
     setSaving(true);
-    await fetch("/api/admin/defaults", {
+    await fetch("/api/admin/default", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

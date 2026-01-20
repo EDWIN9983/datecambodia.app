@@ -1,6 +1,8 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
 
 if (!getApps().length) {
   initializeApp({
@@ -20,12 +22,14 @@ type UserDoc = {
   publicId?: string;
   gender?: string;
   phone?: string;
+  phoneVerified?: boolean;
+  city?: string;
   isBanned?: boolean;
-  isPremium?: boolean;
   likesCount?: number;
   createdAt?: Timestamp;
   lastActive?: Timestamp;
   coinBUntil?: Timestamp;
+  coinsA?: number;
 };
 
 export async function POST(req: NextRequest) {
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     let totalLikes = 0;
     const usersSnap = await usersCol.get();
-    usersSnap.forEach(d => {
+    usersSnap.forEach((d) => {
       if (typeof d.data().likesCount === "number") {
         totalLikes += d.data().likesCount;
       }
@@ -96,27 +100,46 @@ export async function POST(req: NextRequest) {
       banned,
       newJoin,
       verified,
+      city,
       limit = 50,
+      searchQuery,
     } = body;
 
-    let q = db.collection("users") as FirebaseFirestore.Query;
+    const snap = await db.collection("users").get();
+
+    let users: UserDoc[] = snap.docs.map((d) => ({
+      uid: d.id,
+      ...(d.data() as Omit<UserDoc, "uid">),
+    }));
+
+    if (searchQuery && typeof searchQuery === "string") {
+      const q = searchQuery.trim().toLowerCase();
+      users = users.filter(
+        (u) =>
+          u.uid.toLowerCase().includes(q) ||
+          (u.name || "").toLowerCase().includes(q) ||
+          (u.publicId || "").toLowerCase().includes(q.replace("#", ""))
+      );
+    }
 
     if (typeof banned === "boolean") {
-      q = q.where("isBanned", "==", banned);
+      users = users.filter((u) => (u.isBanned === true) === banned);
     }
 
     if (gender) {
-      q = q.where("gender", "==", gender);
+      users = users.filter((u) => u.gender === gender);
     }
 
     if (typeof hasPhone === "boolean") {
-      q = hasPhone
-        ? q.where("phone", "!=", "")
-        : q.where("phone", "==", "");
+      users = hasPhone
+        ? users.filter(
+            (u) => typeof u.phone === "string" && u.phone.trim() !== ""
+          )
+        : users.filter((u) => !u.phone || u.phone.trim() === "");
     }
 
-    if (verified === true) {
-      q = q.where("phoneVerified", "==", true);
+    if (typeof verified === "boolean") {
+      users = users.filter((u) => (u.phoneVerified === true) === verified);
     }
 
     if (newJoin) {
@@ -126,24 +149,35 @@ export async function POST(req: NextRequest) {
           ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
           : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      q = q.where("createdAt", ">=", from);
+      users = users.filter((u) => {
+        const created =
+          u.createdAt?.toDate?.() ||
+          u.lastActive?.toDate?.() ||
+          null;
+
+        return created && created >= from;
+      });
     }
-
-    const snap = await q.limit(limit).get();
-
-    let users: UserDoc[] = snap.docs.map(d => ({
-      uid: d.id,
-      ...(d.data() as Omit<UserDoc, "uid">),
-    }));
 
     if (typeof premium === "boolean") {
       const now = new Date();
-      users = users.filter(u =>
+      users = users.filter((u) =>
         premium
           ? u.coinBUntil && u.coinBUntil.toDate() > now
           : !u.coinBUntil || u.coinBUntil.toDate() <= now
       );
     }
+
+    if (city && typeof city === "string") {
+      const c = city.trim().toLowerCase();
+      users = users.filter(
+        (u) =>
+          typeof u.city === "string" &&
+          u.city.trim().toLowerCase() === c
+      );
+    }
+
+    users = users.slice(0, limit);
 
     return NextResponse.json({ users });
   }
@@ -172,12 +206,93 @@ export async function POST(req: NextRequest) {
         .get();
     }
 
-    const users: UserDoc[] = snap.docs.map(d => ({
+    const users: UserDoc[] = snap.docs.map((d) => ({
       uid: d.id,
       ...(d.data() as Omit<UserDoc, "uid">),
     }));
 
     return NextResponse.json({ users });
+  }
+
+  /* ======================= PREMIUM ======================= */
+  if (action === "premium") {
+    const { uid, until } = body;
+
+    await db.collection("users").doc(uid).update({
+      coinBUntil: Timestamp.fromDate(new Date(until)),
+      lastActive: Timestamp.now(),
+    });
+
+    // 🔔 FIXED notification schema
+    await db.collection("notifications").add({
+      toUid: uid,
+      type: "premium",
+      until: Timestamp.fromDate(new Date(until)),
+      title: "Premium Activated",
+      message: "Your Premium is now active ❤️",
+      read: false,
+      createdAt: Timestamp.now(),
+    });
+
+    return NextResponse.json({ ok: true });
+  }
+
+  /* ======================= COINS ======================= */
+  if (action === "coins") {
+    const { uid, coins } = body;
+
+    const userRef = db.collection("users").doc(uid);
+    const snap = await userRef.get();
+    const current = Number(snap.data()?.coinsA || 0);
+    const next = current + Number(coins || 0);
+
+    await userRef.update({
+      coinsA: next,
+      lastActive: Timestamp.now(),
+    });
+
+    // 🔔 FIXED notification schema
+    await db.collection("notifications").add({
+      toUid: uid,
+      type: "coins",
+      amount: Number(coins),
+      title: "Coins Received",
+      message: `You received ${coins} pulses 🎉`,
+      read: false,
+      createdAt: Timestamp.now(),
+    });
+
+    return NextResponse.json({ ok: true });
+  }
+
+  /* ======================= BAN ======================= */
+  if (action === "ban") {
+    const { uid, ban } = body;
+    if (!uid || typeof ban !== "boolean") {
+      return NextResponse.json({ error: "Missing data" }, { status: 400 });
+    }
+
+    await db.collection("users").doc(uid).update({
+      isBanned: ban,
+      lastActive: Timestamp.now(),
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
+  /* ======================= UPDATE ======================= */
+  if (action === "update") {
+    const { uid, updates } = body;
+    if (!uid || !updates) {
+      return NextResponse.json({ error: "Missing data" }, { status: 400 });
+    }
+
+    await db.collection("users").doc(uid).update({
+      ...updates,
+      lastActive: Timestamp.now(),
+    });
+
+    return NextResponse.json({ success: true });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

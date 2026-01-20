@@ -1,42 +1,84 @@
-// lib/permissions.ts
+import { Timestamp } from "firebase/firestore";
+import type { UserDoc } from "@/lib/types";
 
-import { UserDoc } from "@/lib/types";
+/* =========================
+   PREMIUM CHECK (FINAL)
+========================= */
 
-function now() {
-  return new Date();
-}
-
-export function hasCoinB(user?: UserDoc | null): boolean {
-  if (!user) return false;
+export function isPremiumActive(user: UserDoc | null): boolean {
+  if (!user?.coinBUntil) return false;
 
   const until = user.coinBUntil;
-  if (!until) return false;
 
-  if (until.toDate) {
-    return until.toDate() > now();
+  // Firestore Timestamp
+  if (until instanceof Timestamp) {
+    return until.toDate().getTime() > Date.now();
   }
 
-  return new Date(until) > now();
+  // Serialized Timestamp (Next.js hydration edge case)
+  if (typeof until?.toDate === "function") {
+    return until.toDate().getTime() > Date.now();
+  }
+
+  return false;
 }
 
-// ---------- FEATURE GATES ----------
+/* =========================
+   DAILY LIMITS
+========================= */
 
-export function canViewProfile(user?: UserDoc | null): boolean {
-  return hasCoinB(user);
+export function canSendLike(user: UserDoc | null): boolean {
+  if (!user) return false;
+
+  // Premium bypasses limits
+  if (isPremiumActive(user)) return true;
+
+  const used = user.dailyLikeCount || 0;
+  const limit = 10;
+
+  return used < limit;
 }
 
-export function canGoBack(user?: UserDoc | null): boolean {
-  return hasCoinB(user);
+export function canSendDate(user: UserDoc | null): boolean {
+  if (!user) return false;
+
+  // Premium bypasses limits
+  if (isPremiumActive(user)) return true;
+
+  const used = user.dailyDateCount || 0;
+  const limit = 10;
+
+  return used < limit;
 }
 
-export function canChatWithoutDate(user?: UserDoc | null): boolean {
-  return hasCoinB(user);
+/* =========================
+   FEATURE GATES
+========================= */
+
+export function canViewProfile(user: UserDoc | null): boolean {
+  if (!user) return false;
+
+  // Premium always allowed
+  if (isPremiumActive(user)) return true;
+
+  // Free users limited by pulses (coinA)
+  const pulses = user.coinsA || 0;
+  return pulses > 0;
 }
 
-export function canSendExtraLike(user?: UserDoc | null): boolean {
-  return (user?.coinsA ?? 0) > 0;
+export function canSendMessage(user: UserDoc | null): boolean {
+  if (!user) return false;
+
+  // Premium always allowed
+  if (isPremiumActive(user)) return true;
+
+  const pulses = user.coinsA || 0;
+  return pulses > 0;
 }
 
-export function canSendExtraDate(user?: UserDoc | null): boolean {
-  return (user?.coinsA ?? 0) > 0;
+export function canSeeVisitors(user: UserDoc | null): boolean {
+  if (!user) return false;
+
+  // Premium only feature
+  return isPremiumActive(user);
 }

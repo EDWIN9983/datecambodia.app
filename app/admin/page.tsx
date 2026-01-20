@@ -33,15 +33,12 @@ const CITIES = [
 ];
 
 export default function AdminPage() {
-  // ✅ Admin Auth
   const [password, setPassword] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [error, setError] = useState(false);
 
-  // ✅ Stats
   const [stats, setStats] = useState<Stats | null>(null);
 
-  // ✅ Filters + Search + List
   const [filters, setFilters] = useState({
     premium: null as boolean | null,
     gender: null as "male" | "female" | null,
@@ -51,23 +48,20 @@ export default function AdminPage() {
     verified: null as boolean | null,
     city: "" as string,
   });
+
   const [searchQuery, setSearchQuery] = useState("");
   const [list, setList] = useState<UserDoc[]>([]);
   const [listLoading, setListLoading] = useState(false);
 
-  // ✅ Selected User + Edit
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
   const [editData, setEditData] = useState<Partial<UserDoc>>({});
 
-  // ✅ Premium / Coins
   const [premiumDays, setPremiumDays] = useState(7);
   const [coinsAmount, setCoinsAmount] = useState(0);
 
-  // ✅ Confirmation Modal
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | (() => void)>(null);
 
-  // ✅ Login
   function login() {
     if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
       setAuthorized(true);
@@ -77,24 +71,29 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ Confirmation helper
   function requireConfirm(action: () => void) {
     setPendingAction(() => action);
     setConfirmOpen(true);
   }
 
-  // ✅ API helper
   async function api(action: string) {
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, adminPassword: password }),
+      body: JSON.stringify({
+        action,
+        adminPassword: password,
+      }),
     });
-    if (!res.ok) return null;
+
+    if (!res.ok) {
+      console.error("Admin API error:", await res.text());
+      return null;
+    }
+
     return res.json();
   }
 
-  // ✅ Load List safely (NO APPLY WITHOUT FILTER)
   async function loadList() {
     const hasFilter =
       searchQuery.trim() !== "" ||
@@ -134,7 +133,6 @@ export default function AdminPage() {
     setListLoading(false);
   }
 
-  // ✅ Apply Premium
   async function applyPremium() {
     if (!userDoc?.uid) return;
     const until = new Date();
@@ -154,7 +152,6 @@ export default function AdminPage() {
     setUserDoc({ ...userDoc, coinBUntil: until });
   }
 
-  // ✅ Apply Coins
   async function applyCoins() {
     if (!userDoc?.uid) return;
 
@@ -172,7 +169,6 @@ export default function AdminPage() {
     setUserDoc({ ...userDoc, coinsA: coinsAmount });
   }
 
-  // ✅ Ban / Unban
   async function handleBanToggle(ban: boolean) {
     if (!userDoc?.uid) return;
 
@@ -190,7 +186,6 @@ export default function AdminPage() {
     setUserDoc({ ...userDoc, isBanned: ban });
   }
 
-  // ✅ Apply Edit
   async function applyEdit() {
     if (!userDoc?.uid || !editData) return;
 
@@ -209,15 +204,18 @@ export default function AdminPage() {
     setEditData({});
   }
 
-  // ✅ Fetch stats
   useEffect(() => {
     if (!authorized) return;
+
     api("stats").then((data) => {
-      if (data) setStats(data);
+      if (data && typeof data.totalUsers === "number") {
+        setStats(data);
+      } else {
+        console.error("Invalid stats payload:", data);
+      }
     });
   }, [authorized]);
 
-  // ✅ Unauthorized view
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -245,7 +243,6 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-100">
       <div className="mx-auto max-w-6xl px-6 py-6">
 
-        {/* System Status */}
         <Section title="System Status">
           <div className="grid grid-cols-6 gap-3">
             <Stat label="Total Users" value={stats?.totalUsers} />
@@ -256,8 +253,9 @@ export default function AdminPage() {
             <Stat label="Dates Accepted" value={stats?.acceptedDates} />
           </div>
         </Section>
-	<DefaultsPanel />
-        {/* Search + Filters */}
+
+        <DefaultsPanel />
+
         <Section title="User Filters (Read-only)">
           <div className="flex gap-2 mb-2">
             <input
@@ -305,12 +303,14 @@ export default function AdminPage() {
 
             <select
               onChange={(e) =>
-  		setFilters((f) => ({
-		    ...f,
-		    gender: e.target.value === "male" || e.target.value === "female"   			            ? e.target.value	
-	            : null,
-  		}))
-		}
+                setFilters((f) => ({
+                  ...f,
+                  gender:
+                    e.target.value === "male" || e.target.value === "female"
+                      ? e.target.value
+                      : null,
+                }))
+              }
               className="rounded-xl border p-2 text-sm"
             >
               <option value="">Gender</option>
@@ -348,14 +348,14 @@ export default function AdminPage() {
 
             <select
               onChange={(e) =>
-	  setFilters((f) => ({
-	    ...f,
-	    newJoin:
-	      e.target.value === "7d" || e.target.value === "today"
-	        ? e.target.value
-	        : null,
-		  }))
-		}
+                setFilters((f) => ({
+                  ...f,
+                  newJoin:
+                    e.target.value === "7d" || e.target.value === "today"
+                      ? e.target.value
+                      : null,
+                }))
+              }
               className="rounded-xl border p-2 text-sm"
             >
               <option value="">Joined</option>
@@ -387,7 +387,6 @@ export default function AdminPage() {
           </div>
         </Section>
 
-        {/* Users List */}
         <Section title="Users List">
           {listLoading && <div className="text-sm text-gray-500">Loading…</div>}
           <div className="divide-y">
@@ -409,7 +408,6 @@ export default function AdminPage() {
           </div>
         </Section>
 
-        {/* Selected User Actions */}
         {userDoc && (
           <Section title="User Actions">
             <div className="mt-3 space-y-3">
@@ -479,7 +477,6 @@ export default function AdminPage() {
           </Section>
         )}
 
-        {/* Confirmation Modal */}
         {confirmOpen && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
@@ -520,7 +517,6 @@ export default function AdminPage() {
   );
 }
 
-// Section & Stat Components
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border p-5 bg-white shadow-sm mt-5">

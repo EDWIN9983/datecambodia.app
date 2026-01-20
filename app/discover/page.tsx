@@ -17,8 +17,14 @@ import { doc, getDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-function formatDistanceKm() {
-  const n = Math.random() * 8 + 0.5;
+function formatDistanceKm(uid?: string) {
+  if (!uid) return "—";
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) {
+    h = (h << 5) - h + uid.charCodeAt(i);
+    h |= 0;
+  }
+  const n = (Math.abs(h) % 80) / 10 + 0.5;
   return `${n.toFixed(1)} km away`;
 }
 
@@ -54,7 +60,7 @@ export default function DiscoverPage() {
       if (!user) return router.replace("/login");
       const snap = await getDoc(doc(db, "users", user.uid));
       if (!snap.exists()) return router.replace("/profile-setup");
-      setMe(snap.data() as UserDoc);
+      setMe({ ...(snap.data() as UserDoc), uid: user.uid });
     });
     return () => unsub();
   }, [router]);
@@ -63,12 +69,18 @@ export default function DiscoverPage() {
 
   return (
     <PageShell title="Discover">
-      <DiscoverInner me={me} />
+      <DiscoverInner me={me} setMe={setMe} />
     </PageShell>
   );
 }
 
-function DiscoverInner({ me }: { me: UserDoc }) {
+function DiscoverInner({
+  me,
+  setMe,
+}: {
+  me: UserDoc;
+  setMe: (u: UserDoc | null) => void;
+}) {
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [idx, setIdx] = useState(0);
   const [history, setHistory] = useState<UserDoc[]>([]);
@@ -83,7 +95,6 @@ function DiscoverInner({ me }: { me: UserDoc }) {
   const placeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<any>(null);
 
-  /* ✅ PREMIUM DERIVED FROM COINB (coinBUntil) */
   const premiumActive = useMemo(() => {
     if (!me.coinBUntil) return false;
     if (!(me.coinBUntil instanceof Timestamp)) return false;
@@ -136,9 +147,15 @@ function DiscoverInner({ me }: { me: UserDoc }) {
 
   async function next() {
     if (!current) return;
-    await markViewed(me.uid, current.uid);
-    setHistory((h) => [...h, current]);
+
+    const nextUser = current;
+
+    setHistory((h) => [...h, nextUser]);
     setIdx((i) => i + 1);
+
+    try {
+      await markViewed(me.uid, nextUser.uid);
+    } catch {}
   }
 
   function goBack() {
@@ -155,7 +172,13 @@ function DiscoverInner({ me }: { me: UserDoc }) {
     setBusy(true);
     try {
       await likeUser(me.uid, current.uid);
+      const meNow = await getUserDoc(me.uid);
+      if (meNow) setMe(meNow);
       await next();
+    } catch (e: any) {
+      if (e.message === "LIKE_LIMIT_REACHED") {
+        alert("Daily like limit reached.");
+      }
     } finally {
       setBusy(false);
     }
@@ -169,11 +192,11 @@ function DiscoverInner({ me }: { me: UserDoc }) {
 
     setBusy(true);
     try {
-      const freshMe = await getUserDoc(me.uid);
-      if (!freshMe) return;
+      const meNow = await getUserDoc(me.uid);
+      if (!meNow) return;
 
       await sendDateRequest({
-        fromUser: freshMe,
+        fromUser: meNow,
         toUserId: current.uid,
         date,
         time,
@@ -187,9 +210,14 @@ function DiscoverInner({ me }: { me: UserDoc }) {
       setPlace("");
       setPlaceId(null);
 
+      setMe(meNow);
       await next();
-    } catch {
-      alert("You already sent a date request to this user.");
+    } catch (e: any) {
+      if (e.message === "DATE_LIMIT_REACHED") {
+        alert("Daily date request limit reached.");
+      } else {
+        alert("You already sent a date request to this user.");
+      }
     } finally {
       setBusy(false);
     }
@@ -216,7 +244,9 @@ function DiscoverInner({ me }: { me: UserDoc }) {
               {age !== null && `, ${age}`}
             </div>
 
-            <div className="mt-1 text-sm app-muted">{formatDistanceKm()}</div>
+            <div className="mt-1 text-sm app-muted">
+              {formatDistanceKm(current.uid)}
+            </div>
 
             <div className="mt-3 text-sm app-text">{current.bio}</div>
 

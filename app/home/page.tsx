@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   doc,
-  getDoc,
+  getDocFromServer,
   collection,
   getDocs,
   query,
@@ -97,10 +97,8 @@ export default function HomePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [incomingCount, setIncomingCount] = useState(0);
-  const [outgoingCount, setOutgoingCount] = useState(0);
+  const [adminDailyDateLimit, setAdminDailyDateLimit] = useState(10);
 
-  /* 🔒 HOOK ORDER FIX — ALWAYS CALLED */
   const premiumActive = useMemo(() => {
     if (!profile?.coinBUntil) return false;
     const until = profile.coinBUntil;
@@ -122,46 +120,30 @@ export default function HomePage() {
 
     (async () => {
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
+        const snap = await getDocFromServer(doc(db, "users", user.uid));
         if (!snap.exists()) {
           router.replace("/profile-setup");
           return;
         }
+
         const data = snap.data() as UserProfile;
         if (data.isBanned) {
           router.replace("/login");
           return;
         }
-        setProfile(data);
+
+        setProfile({ ...data, uid: user.uid });
+
+        const adminSnap = await getDocFromServer(doc(db, "adminConfig", "defaults"));
+        if (adminSnap.exists()) {
+          const adminData = adminSnap.data();
+          setAdminDailyDateLimit(Number(adminData.dailyDateCount) || 10);
+        }
       } finally {
         setProfileLoading(false);
       }
     })();
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (!profile?.uid) return;
-    (async () => {
-      const incomingQ = query(
-        collection(db, "dateRequests"),
-        where("toUser", "==", profile.uid),
-        orderBy("createdAt", "desc"),
-        limit(10)
-      );
-      const outgoingQ = query(
-        collection(db, "dateRequests"),
-        where("fromUser", "==", profile.uid),
-        orderBy("createdAt", "desc"),
-        limit(10)
-      );
-      const [inSnap, outSnap] = await Promise.all([
-        getDocs(incomingQ),
-        getDocs(outgoingQ),
-      ]);
-      setIncomingCount(inSnap.size);
-      setOutgoingCount(outSnap.size);
-    })();
-  }, [profile?.uid]);
 
   if (loading || profileLoading || !profile) return null;
 
@@ -226,8 +208,7 @@ export default function HomePage() {
             <div className="text-sm app-muted mt-1">{subtitle}</div>
 
             <div className="text-sm app-muted mt-1">
-              {countryFlag(profile.nationality)} {profile.nationality} ·{" "}
-              {profile.city}
+              {countryFlag(profile.nationality)} {profile.nationality} · {profile.city}
             </div>
           </div>
 
@@ -260,12 +241,8 @@ export default function HomePage() {
             <div>
               Date requests left today:{" "}
               <span className="app-text">
-                {Math.max(0, 10 - (profile.dailyDateCount || 0))}
+                {Math.max(0, adminDailyDateLimit - (profile.dailyDateCount || 0))}
               </span>
-            </div>
-            <div>
-              Incoming: <span className="app-text">{incomingCount}</span> ·
-              Outgoing: <span className="app-text">{outgoingCount}</span>
             </div>
           </div>
 

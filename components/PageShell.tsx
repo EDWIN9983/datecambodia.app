@@ -2,17 +2,17 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
-import { signOut, onAuthStateChanged } from "firebase/auth";
+import { signOut, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import BottomNav from "@/components/BottomNav";
 import {
   collection,
-  getDocs,
   query,
   where,
+  orderBy,
   limit,
-  doc,
-  getDoc,
+  onSnapshot,
+  getDocs,
 } from "firebase/firestore";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -22,13 +22,26 @@ type Props = {
   stickyMenu?: ReactNode;
 };
 
-export default function PageShell({ title, children, stickyMenu }: Props) {
+type NotificationDoc = {
+  id: string;
+  toUid: string;
+  type: string;
+  title: string;
+  body: string;
+  read?: boolean;
+  createdAt?: any;
+};
+
+export default function PageShell({
+  title,
+  children,
+  stickyMenu,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [search, setSearch] = useState("");
-
-  const [hasLikeNotif, setHasLikeNotif] = useState(false);
-  const [hasSystemNotif, setHasSystemNotif] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationDoc[]>([]);
+  const [user, setUser] = useState<User | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -45,47 +58,52 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
   }
 
   /* -----------------------------
-     LIKE + DATE NOTIFICATIONS ONLY
+     AUTH + LIVE NOTIFICATIONS
   ------------------------------*/
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
+    let unsubNotif: (() => void) | null = null;
 
-      const uid = user.uid;
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setNotifications([]);
 
-      const likesQ = query(
-        collection(db, "likes"),
-        where("toUser", "==", uid),
-        where("seen", "==", false)
+      if (!u) return;
+
+      const q = query(
+        collection(db, "notifications"),
+        where("toUid", "==", u.uid),
+        orderBy("createdAt", "desc"),
+        limit(30)
       );
 
-      const datesQ = query(
-        collection(db, "dateRequests"),
-        where("fromUser", "==", uid),
-        where("seenBySender", "==", false)
-      );
-
-      const [likesSnap, datesSnap] = await Promise.all([
-        getDocs(likesQ),
-        getDocs(datesQ),
-      ]);
-
-      setHasLikeNotif(!likesSnap.empty);
-      setHasSystemNotif(!datesSnap.empty);
+      unsubNotif = onSnapshot(q, (snap) => {
+        const items = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        setNotifications(items);
+      });
     });
 
-    return () => unsub();
+    return () => {
+      unsubAuth();
+      if (unsubNotif) unsubNotif();
+    };
   }, []);
 
-  const hasAnyNotif = hasLikeNotif || hasSystemNotif;
+  const hasAnyUnread = notifications.some((n) => n.read === false);
 
   /* -----------------------------
-     SEARCH BY PUBLIC ID
-     (NO COIN / PREMIUM CHECK)
+     SEARCH BY PUBLIC ID (NEW ONLY)
   ------------------------------*/
   async function runSearch() {
     const v = search.trim();
-    if (!/^#(\d{5}|[A-Z]{3}\d{6})$/.test(v)) return;
+
+    // ✅ Only new format: #ABC123456
+	if (!/^#[A-Z]{3}\d{6}$/.test(v)) {
+      alert("Invalid ID format. Use: #ABC12345");
+      return;
+    }
 
     try {
       const q = query(
@@ -95,13 +113,23 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
       );
 
       const snap = await getDocs(q);
-      if (snap.empty) return;
+
+      if (snap.empty) {
+        alert("User not found");
+        return;
+      }
+
+      const userDoc = snap.docs[0];
+      const uid = userDoc.id;
 
       setShowSearchModal(false);
       setSearch("");
 
-      router.push(`/u/${snap.docs[0].id}`);
-    } catch {}
+      // ✅ SAFE: route using Firestore UID
+      router.push(`/u/${uid}`);
+    } catch (e) {
+      alert("Search failed");
+    }
   }
 
   return (
@@ -112,7 +140,6 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
           <h1 className="text-lg font-semibold">{title}</h1>
 
           <div className="flex items-center gap-4">
-            {/* SEARCH ICON */}
             <button
               type="button"
               onClick={() => {
@@ -124,17 +151,15 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
               🔍
             </button>
 
-            {/* NOTIFICATIONS */}
             <Link href="/activity" className="relative text-sm font-semibold">
               ❤️
-              {hasAnyNotif && (
+              {hasAnyUnread && (
                 <span className="ml-1 rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] text-white">
                   NEW
                 </span>
               )}
             </Link>
 
-            {/* MENU */}
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -148,7 +173,6 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
 
       {stickyMenu}
 
-      {/* SEARCH MODAL (DISCOVER ONLY) */}
       {showSearchModal && pathname === "/discover" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="app-card w-[90%] max-w-sm rounded-2xl p-4">
@@ -159,11 +183,9 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
             <input
               autoFocus
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") runSearch();
-              }}
-              placeholder="e.g. #00012"
+              onChange={(e) => setSearch(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && runSearch()}
+              placeholder="e.g. #ABC12345"
               className="w-full app-input mb-3"
             />
 
@@ -188,44 +210,29 @@ export default function PageShell({ title, children, stickyMenu }: Props) {
         </div>
       )}
 
-      {/* HAMBURGER MENU */}
       {open && (
         <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow">
           <nav className="flex flex-col divide-y text-sm">
-            <Link
-              href="/profile"
-              className="px-4 py-3"
-              onClick={() => setOpen(false)}
-            >
+            <Link href="/profile" className="px-4 py-3">
               Profile
             </Link>
-            <Link
-              href="/store"
-              className="px-4 py-3"
-              onClick={() => setOpen(false)}
-            >
+            <Link href="/store" className="px-4 py-3">
               Store
             </Link>
-            <Link
-              href="/settings"
-              className="px-4 py-3"
-              onClick={() => setOpen(false)}
-            >
+            <Link href="/settings" className="px-4 py-3">
               Settings
             </Link>
             <Link
-              href="/contact"
+              href="https://datecambodia.app/contact"
               className="px-4 py-3"
-              onClick={() => setOpen(false)}
             >
-              Contact Us
+              Contact
             </Link>
             <Link
-              href="/legal"
+              href="https://datecambodia.app/community"
               className="px-4 py-3"
-              onClick={() => setOpen(false)}
             >
-              Info
+              Community
             </Link>
             <button
               onClick={logout}

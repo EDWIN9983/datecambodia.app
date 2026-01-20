@@ -1,5 +1,4 @@
-// FILE 1 — CREATE NEW FILE
-// app/api/admin/apply-limits/route.ts
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getApps, initializeApp, cert } from "firebase-admin/app";
@@ -18,11 +17,18 @@ if (!getApps().length) {
 const adminDb = getFirestore();
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { adminPassword, scope, limits } = body;
+  let body: any;
+
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false });
+  }
+
+  const { adminPassword, scope, limits } = body || {};
 
   if (adminPassword !== process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false });
   }
 
   const usersSnap = await adminDb.collection("users").get();
@@ -31,7 +37,8 @@ export async function POST(req: Request) {
 
   usersSnap.forEach((doc) => {
     const data = doc.data();
-    const isPremium = data.coinBUntil && data.coinBUntil.toMillis() > now.toMillis();
+    const isPremium =
+      data.coinBUntil && data.coinBUntil.toMillis() > now.toMillis();
 
     if (scope === "all") {
       batch.update(doc.ref, {

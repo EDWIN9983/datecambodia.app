@@ -13,9 +13,10 @@ import {
   query,
   where,
   updateDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 type ActivityItem = {
   id: string;
@@ -30,6 +31,22 @@ function formatTime(ts: any) {
   if (!ts) return "";
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleString();
+}
+
+function isPremiumActive(user: UserDoc | null): boolean {
+  if (!user?.coinBUntil) return false;
+
+  const until: any = user.coinBUntil;
+
+  if (until instanceof Timestamp) {
+    return until.toDate().getTime() > Date.now();
+  }
+
+  if (typeof until?.toDate === "function") {
+    return until.toDate().getTime() > Date.now();
+  }
+
+  return false;
 }
 
 export default function Page() {
@@ -62,90 +79,132 @@ export default function Page() {
   }, [router]);
 
   /* -----------------------------
-     LOAD ACTIVITY (STRICT TS SAFE)
+     LOAD ACTIVITY (FIXED)
   ------------------------------*/
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!me?.uid) return;
 
-    const uid = auth.currentUser.uid;
+    const uid = me.uid;
 
     async function load() {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const likesQ = query(
-        collection(db, "likes"),
-        where("toUser", "==", uid),
-        orderBy("createdAt", "desc")
-      );
+        const likesQ = query(
+          collection(db, "likes"),
+          where("toUser", "==", uid),
+          orderBy("createdAt", "desc")
+        );
 
-      const datesQ = query(
-        collection(db, "dateRequests"),
-        where("fromUser", "==", uid),
-        orderBy("respondedAt", "desc")
-      );
+        const datesQ = query(
+          collection(db, "dateRequests"),
+          where("fromUser", "==", uid),
+          orderBy("respondedAt", "desc")
+        );
 
-      const [likesSnap, datesSnap] = await Promise.all([
-        getDocs(likesQ),
-        getDocs(datesQ),
-      ]);
+        const [likesSnap, datesSnap] = await Promise.all([
+          getDocs(likesQ),
+          getDocs(datesQ),
+        ]);
 
-      const likeItems: ActivityItem[] = [];
+        const likeItems: ActivityItem[] = [];
 
-      for (const d of likesSnap.docs) {
-        const fromUid = d.data().fromUser;
-        if (!fromUid) continue;
+        for (const d of likesSnap.docs) {
+          const fromUid = d.data().fromUser;
+          if (!fromUid) continue;
 
-        const uSnap = await getDoc(doc(db, "users", fromUid));
-        if (!uSnap.exists()) continue;
+          const uSnap = await getDoc(doc(db, "users", fromUid));
+          if (!uSnap.exists()) continue;
 
-        likeItems.push({
-          id: d.id,
-          type: "like",
-          text: "❤️ Someone liked your profile",
-          createdAt: d.data().createdAt,
-          fromUser: fromUid,
-          photo: uSnap.data().photos?.[0],
-        });
-      }
-
-      const systemItems: ActivityItem[] = datesSnap.docs
-        .filter((d) => d.data().status !== "pending")
-        .map((d) => ({
-          id: d.id,
-          type: "system",
-          text:
-            d.data().status === "accepted"
-              ? "🔔 Your date request was accepted"
-              : d.data().status === "declined"
-              ? "🔔 Your date request was declined"
-              : "🔔 Your date request expired",
-          createdAt: d.data().respondedAt || d.data().createdAt,
-        }));
-
-      const merged = [...likeItems, ...systemItems].sort((a, b) => {
-        const ta = a.createdAt?.toMillis?.() || 0;
-        const tb = b.createdAt?.toMillis?.() || 0;
-        return tb - ta;
-      });
-
-      setItems(merged.slice(0, 50));
-      setLoading(false);
-
-      for (const d of datesSnap.docs) {
-        if (d.data().seenBySender === false) {
-          await updateDoc(doc(db, "dateRequests", d.id), {
-            seenBySender: true,
+          likeItems.push({
+            id: d.id,
+            type: "like",
+            text: "❤️ Someone liked your profile",
+            createdAt: d.data().createdAt,
+            fromUser: fromUid,
+            photo: uSnap.data().photos?.[0],
           });
         }
+
+        const systemItems: ActivityItem[] = datesSnap.docs
+          .filter((d) => d.data().status !== "pending")
+          .map((d) => ({
+            id: d.id,
+            type: "system",
+            text:
+              d.data().status === "accepted"
+                ? "🔔 Your date request was accepted"
+                : d.data().status === "declined"
+                ? "🔔 Your date request was declined"
+                : "🔔 Your date request expired",
+            createdAt: d.data().respondedAt || d.data().createdAt,
+          }));
+
+        const notifQ = query(
+          collection(db, "notifications"),
+          where("toUid", "==", uid),
+          where("read", "==", false)
+        );
+
+        const notifSnap = await getDocs(notifQ);
+
+        const notifItems: ActivityItem[] = notifSnap.docs.map((n) => ({
+          id: n.id,
+          type: "system",
+          text:
+            n.data().type === "coins"
+              ? `🪙 You received ${n.data().amount || ""} pulses`
+              : n.data().type === "premium"
+              ? "❤️ Premium activated on your account"
+              : n.data().title || n.data().message || "🔔 New notification",
+          createdAt: n.data().createdAt,
+        }));
+
+        const merged = [...likeItems, ...systemItems, ...notifItems].sort(
+          (a, b) => {
+            const ta = a.createdAt?.toMillis?.() || 0;
+            const tb = b.createdAt?.toMillis?.() || 0;
+            return tb - ta;
+          }
+        );
+
+        setItems(merged.slice(0, 50));
+
+        for (const d of datesSnap.docs) {
+          if (d.data().seenBySender === false) {
+            await updateDoc(doc(db, "dateRequests", d.id), {
+              seenBySender: true,
+            });
+          }
+        }
+
+        for (const n of notifSnap.docs) {
+          await updateDoc(doc(db, "notifications", n.id), {
+            read: true,
+          });
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Activity load error:", err);
+        setLoading(false);
       }
     }
 
     load();
-  }, []);
+  }, [me?.uid]);
 
-  if (!me) return null;
+  const premiumActive = useMemo(() => isPremiumActive(me), [me]);
 
-  const isPremium = Boolean((me as any).isPremium);
+  if (!me) {
+    return (
+      <PageShell title="Activity">
+        <div className="app-card rounded-2xl p-6 text-center text-sm app-muted">
+          Loading…
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell title="Activity">
@@ -173,13 +232,13 @@ export default function Page() {
                 {i.type === "like" && (
                   <button
                     onClick={() =>
-                      isPremium
+                      premiumActive
                         ? router.push(`/u/${i.fromUser}`)
                         : router.push("/store")
                     }
                     className="mt-1 text-xs font-semibold app-primary underline"
                   >
-                    {isPremium ? "View profile" : "Unlock to see who"}
+                    {premiumActive ? "View profile" : "Unlock to see who"}
                   </button>
                 )}
               </div>
@@ -189,7 +248,7 @@ export default function Page() {
                   <img
                     src={i.photo}
                     className={`h-full w-full object-cover ${
-                      isPremium ? "" : "blur-md"
+                      premiumActive ? "" : "blur-md"
                     }`}
                   />
                 </div>

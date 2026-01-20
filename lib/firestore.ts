@@ -1,4 +1,3 @@
-// lib/firestore.ts
 import {
   collection,
   query,
@@ -11,12 +10,11 @@ import {
   updateDoc,
   setDoc,
   deleteDoc,
+  runTransaction,
+  increment,
 } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 
-// =========================
-// TYPES
-// =========================
 export type UserDoc = {
   uid: string;
   name?: string;
@@ -33,11 +31,19 @@ export type UserDoc = {
   lastDiscoverReset?: any;
   viewedToday?: string[];
   isBanned?: boolean;
+  coinsA?: number;
+  coinBUntil?: any;
 };
 
-// =========================
-// GET USER PROFILE
-// =========================
+async function writeNotification(toUid: string, data: any) {
+  await addDoc(collection(db, "notifications"), {
+    ...data,
+    toUid,
+    read: false,
+    createdAt: serverTimestamp(),
+  });
+}
+
 export async function getUserDoc(uid: string): Promise<UserDoc | null> {
   const ref = doc(db, "users", uid);
   const snap = await getDoc(ref);
@@ -45,17 +51,34 @@ export async function getUserDoc(uid: string): Promise<UserDoc | null> {
   return snap.data() as UserDoc;
 }
 
-// =========================
-// CREATE USER PROFILE
-// =========================
 export async function createUserDoc(data: UserDoc) {
   const ref = doc(db, "users", data.uid);
   await setDoc(ref, data);
+
+  await writeNotification(data.uid, {
+    type: "system",
+    title: "Welcome 🎉",
+    body: "Welcome to DateCambodia! Enjoy your experience.",
+  });
+
+  if (typeof data.coinsA === "number" && data.coinsA > 0) {
+    await writeNotification(data.uid, {
+      type: "coins",
+      title: "Bonus Coins",
+      body: `You received ${data.coinsA} bonus coins.`,
+      amount: data.coinsA,
+    });
+  }
+
+  if (data.coinBUntil) {
+    await writeNotification(data.uid, {
+      type: "premium",
+      title: "Premium Activated",
+      body: "Your premium access is active.",
+    });
+  }
 }
 
-// =========================
-// DISCOVER USERS
-// =========================
 export async function listDiscoverUsers({
   currentUid,
 }: {
@@ -66,25 +89,57 @@ export async function listDiscoverUsers({
 
   return snap.docs
     .map((d) => d.data() as UserDoc)
-    .filter((u) => u.uid !== currentUid && !u.isBanned);
+    .filter(
+      (u) =>
+        u.uid !== currentUid &&
+        !u.isBanned
+        // Uncomment below if you want to hide already viewed users
+        // && !(u.viewedToday || []).includes(currentUid)
+    );
 }
 
-// =========================
-// LIKE USER
-// =========================
+/* =========================
+   TEMP LIKE MODE (SAFE)
+========================= */
 export async function likeUser(fromUid: string, toUid: string) {
-  await addDoc(collection(db, "likes"), {
-    fromUser: fromUid,
-    toUser: toUid,
-    createdAt: serverTimestamp(),
-  });
+  const defaults = await getAdminDefaults();
 
-  await incrementDailyLike(fromUid);
+  await runTransaction(db, async (tx) => {
+    const fromRef = doc(db, "users", fromUid);
+    const toRef = doc(db, "users", toUid);
+
+    const fromSnap = await tx.get(fromRef);
+    const toSnap = await tx.get(toRef);
+
+    if (!fromSnap.exists() || !toSnap.exists()) {
+      throw new Error("MISSING_USER");
+    }
+
+    const from = fromSnap.data();
+
+    await ensureDailyReset(tx, fromRef, from);
+
+    const used = from.dailyLikeCount || 0;
+    if (used >= defaults.defaultDailyLikeCount) {
+      throw new Error("LIKE_LIMIT_REACHED");
+    }
+
+    // ✅ increment sender daily count
+    tx.update(fromRef, { dailyLikeCount: increment(1) });
+
+    // ✅ increment receiver visible count (USED BY HOME + PUBLIC PROFILE)
+    tx.update(toRef, { likesCount: increment(1) });
+
+    // ✅ ORIGINAL persistent like write
+    const likeRef = doc(collection(db, "likes"));
+    tx.set(likeRef, {
+      fromUser: fromUid,
+      toUser: toUid,
+      createdAt: serverTimestamp(),
+    });
+  });
 }
 
-// =========================
-// DATE REQUEST (FIXED)
-// =========================
 export async function sendDateRequest({
   fromUser,
   toUserId,
@@ -100,55 +155,54 @@ export async function sendDateRequest({
   place: string;
   placeId: string;
 }) {
-  const a = fromUser.uid;
-  const b = toUserId;
+  const defaults = await getAdminDefaults();
 
-  const forwardId = `${a}_${b}`;
-  const reverseId = `${b}_${a}`;
+  await runTransaction(db, async (tx) => {
+    const fromRef = doc(db, "users", fromUser.uid);
+    const fromSnap = await tx.get(fromRef);
+    if (!fromSnap.exists()) throw new Error("MISSING_USER");
 
-  const forwardRef = doc(db, "dateRequests", forwardId);
-  const reverseRef = doc(db, "dateRequests", reverseId);
+    const data = fromSnap.data();
 
-  const [forwardSnap, reverseSnap] = await Promise.all([
-    getDoc(forwardRef),
-    getDoc(reverseRef),
-  ]);
+    await ensureDailyReset(tx, fromRef, data);
 
-  if (forwardSnap.exists()) {
-    const d = forwardSnap.data() as any;
-    if (d.status === "pending" || d.status === "accepted") {
-      throw new Error("DATE_REQUEST_EXISTS");
+    const used = data.dailyDateCount || 0;
+    if (used >= defaults.defaultDailyDateCount) {
+      throw new Error("DATE_LIMIT_REACHED");
     }
-  }
 
-  if (reverseSnap.exists()) {
-    const d = reverseSnap.data() as any;
-    if (d.status === "pending" || d.status === "accepted") {
-      throw new Error("REVERSE_DATE_REQUEST_EXISTS");
-    }
-  }
+    // ✅ FIXED duplicate check with data guard
+    const dupQ = query(
+      collection(db, "dateRequests"),
+      where("fromUser", "==", fromUser.uid),
+      where("toUser", "==", toUserId)
+    );
 
-  await setDoc(forwardRef, {
-    fromUser: a,
-    toUser: b,
-    date,
-    time,
-    place,
-    placeId,
-    status: "pending",
-    createdAt: serverTimestamp(),
-  });
+    const dupSnap = await getDocs(dupQ);
 
-  const userRef = doc(db, "users", a);
-  await updateDoc(userRef, {
-    dailyDateCount: (fromUser.dailyDateCount || 0) + 1,
-    lastReset: serverTimestamp(),
+    const hasPending = dupSnap.docs.some(
+      (d) => d.data().status === "pending"
+    );
+
+    if (hasPending) throw new Error("DUPLICATE");
+
+    tx.update(fromRef, { dailyDateCount: increment(1) });
+
+    // ✅ Fixed doc ID to match Firestore rule
+    const ref = doc(db, "dateRequests", `${fromUser.uid}_${toUserId}`);
+    tx.set(ref, {
+      fromUser: fromUser.uid,
+      toUser: toUserId,
+      date,
+      time,
+      place,
+      placeId,
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
   });
 }
 
-// =========================
-// UPDATE USER PHOTO
-// =========================
 export async function updateUserPhoto(photoUrl: string) {
   const user = auth.currentUser;
   if (!user) return;
@@ -159,17 +213,25 @@ export async function updateUserPhoto(photoUrl: string) {
   });
 }
 
-// =========================
-// VIEW TRACKING
-// =========================
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+export async function blockUser(fromUid: string, toUid: string) {
+  await setDoc(doc(db, "blocks", `${fromUid}_${toUid}`), {
+    fromUid,
+    toUid,
+    createdAt: new Date(),
+  });
 }
 
+export async function unblockUser(fromUid: string, toUid: string) {
+  await deleteDoc(doc(db, "blocks", `${fromUid}_${toUid}`));
+}
+
+export async function getBlockedUserIds(uid: string): Promise<string[]> {
+  const q = query(collection(db, "blocks"), where("fromUid", "==", uid));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data().toUid);
+}
+
+/* ======================= VIEW TRACKING ======================= */
 export async function markViewed(uid: string, viewedUid: string) {
   const ref = doc(db, "users", uid);
   const snap = await getDoc(ref);
@@ -195,54 +257,39 @@ export async function markViewed(uid: string, viewedUid: string) {
   });
 }
 
-// =========================
-// DAILY LIKE COUNTER
-// =========================
-export async function incrementDailyLike(uid: string) {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const data = snap.data() as any;
-  const now = new Date();
-
-  let count = data.dailyLikeCount || 0;
-  const last = data.lastLikeReset?.toDate?.();
-
-  if (!last || !isSameDay(last, now)) {
-    count = 0;
-  }
-
-  await updateDoc(ref, {
-    dailyLikeCount: count + 1,
-    lastLikeReset: serverTimestamp(),
-  });
-}
-
-// ======================================================
-// 🔒 BLOCK LOGIC (v1) — ADDED (NO EXISTING CODE TOUCHED)
-// ======================================================
-
-// Block user
-export async function blockUser(fromUid: string, toUid: string) {
-  await setDoc(doc(db, "blocks", `${fromUid}_${toUid}`), {
-    fromUid,
-    toUid,
-    createdAt: new Date(),
-  });
-}
-
-// Unblock user
-export async function unblockUser(fromUid: string, toUid: string) {
-  await deleteDoc(doc(db, "blocks", `${fromUid}_${toUid}`));
-}
-
-// Get blocked user IDs
-export async function getBlockedUserIds(uid: string): Promise<string[]> {
-  const q = query(
-    collection(db, "blocks"),
-    where("fromUid", "==", uid)
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
   );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data().toUid);
+}
+
+async function getAdminDefaults() {
+  const snap = await getDoc(doc(db, "adminConfig", "defaults"));
+  if (!snap.exists()) {
+    return { defaultDailyLikeCount: 10, defaultDailyDateCount: 10 };
+  }
+  const d = snap.data();
+  return {
+    defaultDailyLikeCount: Number(d.defaultDailyLikeCount) || 10,
+    defaultDailyDateCount: Number(d.defaultDailyDateCount) || 10,
+  };
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+async function ensureDailyReset(tx: any, userRef: any, data: any) {
+  const last = data.lastReset?.toDate?.()?.getTime() || 0;
+  if (last >= startOfToday()) return;
+
+  tx.update(userRef, {
+    dailyLikeCount: 0,
+    dailyDateCount: 0,
+    lastReset: serverTimestamp(),
+  });
 }
