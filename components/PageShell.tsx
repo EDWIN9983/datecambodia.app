@@ -15,6 +15,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { usePathname, useRouter } from "next/navigation";
+import { Sparkles, HeartPulse, AlignJustify } from "lucide-react";
 
 type Props = {
   title?: string;
@@ -47,7 +48,6 @@ export default function PageShell({
   const pathname = usePathname();
 
   useEffect(() => {
-    setShowSearchModal(false);
     setSearch("");
     setOpen(false);
   }, [pathname]);
@@ -94,13 +94,12 @@ export default function PageShell({
   const hasAnyUnread = notifications.some((n) => n.read === false);
 
   /* -----------------------------
-     SEARCH BY PUBLIC ID (NEW ONLY)
+     SEARCH BY PUBLIC ID
   ------------------------------*/
   async function runSearch() {
     const v = search.trim();
 
-    // ✅ Only new format: #ABC123456
-	if (!/^#[A-Z]{3}\d{6}$/.test(v)) {
+    if (!/^#[A-Z]{3}\d{6}$/.test(v)) {
       alert("Invalid ID format. Use: #ABC12345");
       return;
     }
@@ -125,9 +124,9 @@ export default function PageShell({
       setShowSearchModal(false);
       setSearch("");
 
-      // ✅ SAFE: route using Firestore UID
+      // 🔒 SAFE REDIRECT — PROFILE PAGE HANDLES ITS OWN LAYOUT
       router.push(`/u/${uid}`);
-    } catch (e) {
+    } catch {
       alert("Search failed");
     }
   }
@@ -137,35 +136,55 @@ export default function PageShell({
       {/* HEADER */}
       <header className="bg-white border-b px-4 py-3 sticky top-0 z-30">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">{title}</h1>
+          {/* LOGO */}
+          <Link href="/home" className="flex items-center">
+            <img
+              src="/logo.svg"
+              alt="DateCambodia"
+              className="h-7 w-auto object-contain"
+            />
+          </Link>
 
           <div className="flex items-center gap-4">
+            {/* Sexy Search — INSTANT POPUP */}
             <button
               type="button"
-              onClick={() => {
-                router.push("/discover");
-                setShowSearchModal(true);
-              }}
-              className="text-xl"
+              onClick={() => setShowSearchModal(true)}
+              className="transition-transform hover:scale-110"
             >
-              🔍
+              <Sparkles
+                size={22}
+                strokeWidth={2}
+                className="text-pink-400 hover:text-pink-500 drop-shadow-[0_0_6px_rgba(236,72,153,0.7)]"
+              />
             </button>
 
-            <Link href="/activity" className="relative text-sm font-semibold">
-              ❤️
+            {/* Sexy Likes */}
+            <Link
+              href="/activity"
+              className="relative transition-transform hover:scale-110"
+            >
+              <HeartPulse
+                size={22}
+                strokeWidth={2}
+                className="text-pink-400 hover:text-pink-500 drop-shadow-[0_0_6px_rgba(236,72,153,0.7)]"
+              />
               {hasAnyUnread && (
-                <span className="ml-1 rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] text-white">
-                  NEW
-                </span>
+                <span className="absolute -top-1 -right-2 h-2 w-2 rounded-full bg-pink-500 animate-pulse" />
               )}
             </Link>
 
+            {/* Sexy Menu */}
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
-              className="text-xl"
+              className="transition-transform hover:scale-110"
             >
-              ☰
+              <AlignJustify
+                size={24}
+                strokeWidth={2}
+                className="text-pink-400 hover:text-pink-500 drop-shadow-[0_0_6px_rgba(236,72,153,0.7)]"
+              />
             </button>
           </div>
         </div>
@@ -173,7 +192,8 @@ export default function PageShell({
 
       {stickyMenu}
 
-      {showSearchModal && pathname === "/discover" && (
+      {/* SEARCH MODAL */}
+      {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="app-card w-[90%] max-w-sm rounded-2xl p-4">
             <div className="text-sm font-semibold mb-2 app-text">
@@ -210,33 +230,37 @@ export default function PageShell({
         </div>
       )}
 
+      {/* HAMBURGER MENU */}
       {open && (
-        <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow">
-          <nav className="flex flex-col divide-y text-sm">
-            <Link href="/profile" className="px-4 py-3">
-              Profile
-            </Link>
-            <Link href="/store" className="px-4 py-3">
+        <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow text-gray-900">
+          <nav className="flex flex-col divide-y divide-gray-200 text-sm">
+            <Link
+              href="/store"
+              className="px-4 py-3 hover:bg-gray-100 font-medium"
+            >
               Store
             </Link>
-            <Link href="/settings" className="px-4 py-3">
+            <Link
+              href="/settings"
+              className="px-4 py-3 hover:bg-gray-100 font-medium"
+            >
               Settings
             </Link>
             <Link
               href="https://datecambodia.app/contact"
-              className="px-4 py-3"
+              className="px-4 py-3 hover:bg-gray-100 font-medium"
             >
               Contact
             </Link>
             <Link
               href="https://datecambodia.app/community"
-              className="px-4 py-3"
+              className="px-4 py-3 hover:bg-gray-100 font-medium"
             >
               Community
             </Link>
             <button
               onClick={logout}
-              className="px-4 py-3 text-left text-red-600"
+              className="px-4 py-3 text-left text-red-600 hover:bg-red-50 font-semibold"
             >
               Logout
             </button>

@@ -1,10 +1,11 @@
-import { initializeApp, getApps } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
   setPersistence,
   browserLocalPersistence,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
@@ -16,17 +17,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-/**
- * AUTH — MUST BE INITIALIZED ONCE
- * PERSISTENCE MUST BE SET BEFORE ANY LISTENERS
- */
 export const auth = getAuth(app);
-
-setPersistence(auth, browserLocalPersistence).catch(() => {
-  // ignore — prevents crash in dev / SSR
-});
-
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export const functions = getFunctions(app, "us-central1");
+
+/*
+  🔒 AUTH PERSISTENCE
+  MUST be set before any onAuthStateChanged listeners attach.
+  This guarantees users stay logged in across refresh, tab close, and browser restart.
+*/
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.error("Failed to set auth persistence", err);
+});

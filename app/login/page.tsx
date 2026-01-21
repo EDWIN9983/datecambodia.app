@@ -1,4 +1,3 @@
-// app/login/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -92,22 +91,14 @@ export default function LoginPage() {
     setLoading(false);
   }
 
+  // ⛔ Facebook wiring intentionally disabled (business verification pending)
   async function signInWithFacebook() {
-    setError(null);
-    setLoading(true);
-    try {
-      const provider = new FacebookAuthProvider();
-      await signInWithPopup(auth, provider);
-      router.replace("/auth-redirect");
-    } catch (e: any) {
-      setError(e?.message || "Facebook sign-in failed");
-    }
-    setLoading(false);
+    return;
   }
 
   return (
     <main className="w-full min-h-screen bg-white">
-      {/* HERO / LANDING */}
+      {/* SEO HERO */}
       <section
         className="relative min-h-screen w-full flex items-center justify-center overflow-hidden"
         style={{
@@ -116,7 +107,7 @@ export default function LoginPage() {
           backgroundPosition: "center",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-pink-600/70 via-rose-500/60 to-black/70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-pink-700/80 via-rose-600/70 to-black/80" />
 
         <div className="absolute inset-0 pointer-events-none">
           {hearts.map((h, i) => (
@@ -133,21 +124,26 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <div className="relative z-10 px-6 text-center max-w-xl">
+        <div className="relative z-10 px-6 text-center max-w-2xl">
           <h1 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
-            Find Real Connections in Cambodia ❤️
+            DateCambodia — No.1 Cambodian Dating App ❤️
           </h1>
 
-          <p className="mt-4 text-base md:text-lg text-white/90">
-            A modern dating website for real people.  
-            Simple, secure, and mobile-first.
+          <p className="mt-4 text-base md:text-lg text-white/95">
+            Meet real Khmer singles on the most trusted Cambodian dating website.  
+            Chat, match, and date genuine people near you.
+          </p>
+
+          <p className="mt-3 text-sm md:text-base text-white/90">
+            DateCambodia.app is the No.1 Khmer dating platform for dating in Cambodia.  
+            Find love, fun, and real relationships with Cambodian women and men today.
           </p>
 
           <a
             href="#auth"
             className="inline-flex mt-8 rounded-full bg-white px-8 py-3 text-base font-semibold text-pink-600 shadow-lg hover:scale-105 transition"
           >
-            Get Started
+            Start Dating Now
           </a>
         </div>
       </section>
@@ -155,28 +151,34 @@ export default function LoginPage() {
       {/* HOW IT WORKS */}
       <section className="px-6 py-16 max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold text-center text-gray-900">
-          How it works
+          How DateCambodia Works
         </h2>
 
         <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="rounded-2xl border p-6 shadow-sm">
-            <h3 className="font-semibold text-lg">Sign Up</h3>
-            <p className="mt-2 text-gray-600 text-sm">
-              Join using your phone number, Google, or Facebook.
+            <h3 className="font-semibold text-lg text-gray-900">
+              Sign Up Free
+            </h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Join the No.1 Cambodian dating app using your phone number or Google.
             </p>
           </div>
 
           <div className="rounded-2xl border p-6 shadow-sm">
-            <h3 className="font-semibold text-lg">Create Profile</h3>
-            <p className="mt-2 text-gray-600 text-sm">
-              Add photos and basic details about yourself.
+            <h3 className="font-semibold text-lg text-gray-900">
+              Create Your Profile
+            </h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Add photos, interests, and details to attract real Khmer singles.
             </p>
           </div>
 
           <div className="rounded-2xl border p-6 shadow-sm">
-            <h3 className="font-semibold text-lg">Start Dating</h3>
-            <p className="mt-2 text-gray-600 text-sm">
-              Discover people nearby and connect.
+            <h3 className="font-semibold text-lg text-gray-900">
+              Start Dating
+            </h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Discover people nearby and connect instantly on DateCambodia.
             </p>
           </div>
         </div>
@@ -185,24 +187,24 @@ export default function LoginPage() {
       {/* AUTH SECTION */}
       <section id="auth" className="px-6 pb-20">
         <div className="mx-auto max-w-md">
-          <div className="rounded-3xl border bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border bg-white p-6 shadow-lg">
             <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Join Date Cambodia
+              <h2 className="text-2xl font-extrabold text-gray-900">
+                Join DateCambodia
               </h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-700 mt-1">
                 Sign in to continue
               </p>
             </div>
 
             {step === "phone" ? (
               <div className="space-y-4">
-                <label className="text-sm font-medium text-gray-900">
+                <label className="text-sm font-semibold text-gray-800">
                   Phone number
                 </label>
 
                 <input
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-pink-400 focus:ring-4 focus:ring-pink-100"
+                  className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-100"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+85512345678"
@@ -211,17 +213,17 @@ export default function LoginPage() {
                 <button
                   onClick={sendCode}
                   disabled={loading}
-                  className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 py-3 text-white font-semibold disabled:opacity-50"
+                  className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 py-3 text-white font-bold shadow-md hover:opacity-95 disabled:opacity-50"
                 >
                   {loading ? "Sending..." : "Continue with Phone"}
                 </button>
 
                 <div className="relative py-3">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t" />
+                    <div className="w-full border-t border-gray-300" />
                   </div>
                   <div className="relative flex justify-center">
-                    <span className="bg-white px-3 text-xs text-gray-500">
+                    <span className="bg-white px-3 text-xs font-semibold text-gray-600">
                       OR
                     </span>
                   </div>
@@ -230,31 +232,33 @@ export default function LoginPage() {
                 <button
                   onClick={signInWithGoogle}
                   disabled={loading}
-                  className="w-full rounded-2xl border py-3 font-semibold"
+                  className="w-full rounded-2xl border border-gray-300 py-3 font-semibold text-gray-800 hover:bg-gray-50"
                 >
                   Continue with Google
                 </button>
 
+                {/* FACEBOOK — DISABLED SAFELY */}
                 <button
-                  onClick={signInWithFacebook}
-                  disabled={loading}
-                  className="w-full rounded-2xl border py-3 font-semibold"
+                  type="button"
+                  disabled
+                  className="w-full rounded-2xl border border-gray-300 py-3 font-semibold text-gray-400 cursor-not-allowed"
+                  title="Facebook login coming soon"
                 >
-                  Continue with Facebook
+                  Continue with Facebook (Coming Soon)
                 </button>
 
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-xs text-gray-600 text-center">
                   By continuing, you confirm you are 18+
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
-                <label className="text-sm font-medium text-gray-900">
+                <label className="text-sm font-semibold text-gray-800">
                   Verification code
                 </label>
 
                 <input
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-pink-400 focus:ring-4 focus:ring-pink-100"
+                  className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-100"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="6-digit code"
@@ -263,7 +267,7 @@ export default function LoginPage() {
                 <button
                   onClick={verifyCode}
                   disabled={loading}
-                  className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 py-3 text-white font-semibold disabled:opacity-50"
+                  className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 py-3 text-white font-bold shadow-md hover:opacity-95 disabled:opacity-50"
                 >
                   {loading ? "Verifying..." : "Verify & Continue"}
                 </button>
