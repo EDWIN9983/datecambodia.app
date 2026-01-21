@@ -93,8 +93,6 @@ export async function listDiscoverUsers({
       (u) =>
         u.uid !== currentUid &&
         !u.isBanned
-        // Uncomment below if you want to hide already viewed users
-        // && !(u.viewedToday || []).includes(currentUid)
     );
 }
 
@@ -102,7 +100,7 @@ export async function listDiscoverUsers({
    TEMP LIKE MODE (SAFE)
 ========================= */
 export async function likeUser(fromUid: string, toUid: string) {
-  const defaults = await getAdminDefaults();
+  const limits = await getAdminLimits();
 
   await runTransaction(db, async (tx) => {
     const fromRef = doc(db, "users", fromUid);
@@ -119,18 +117,24 @@ export async function likeUser(fromUid: string, toUid: string) {
 
     await ensureDailyReset(tx, fromRef, from);
 
+    const now = Date.now();
+    const isPremium =
+      from.coinBUntil?.toDate?.()?.getTime() > now;
+
+    const limit = isPremium
+      ? limits.premiumDailyLikeCount
+      : limits.defaultDailyLikeCount;
+
     const used = from.dailyLikeCount || 0;
-    if (used >= defaults.defaultDailyLikeCount) {
+
+    if (used >= limit) {
       throw new Error("LIKE_LIMIT_REACHED");
     }
 
-    // ✅ increment sender daily count
     tx.update(fromRef, { dailyLikeCount: increment(1) });
 
-    // ✅ increment receiver visible count (USED BY HOME + PUBLIC PROFILE)
     tx.update(toRef, { likesCount: increment(1) });
 
-    // ✅ ORIGINAL persistent like write
     const likeRef = doc(collection(db, "likes"));
     tx.set(likeRef, {
       fromUser: fromUid,
@@ -155,7 +159,7 @@ export async function sendDateRequest({
   place: string;
   placeId: string;
 }) {
-  const defaults = await getAdminDefaults();
+  const limits = await getAdminLimits();
 
   await runTransaction(db, async (tx) => {
     const fromRef = doc(db, "users", fromUser.uid);
@@ -166,12 +170,20 @@ export async function sendDateRequest({
 
     await ensureDailyReset(tx, fromRef, data);
 
+    const now = Date.now();
+    const isPremium =
+      data.coinBUntil?.toDate?.()?.getTime() > now;
+
+    const limit = isPremium
+      ? limits.premiumDailyDateCount
+      : limits.defaultDailyDateCount;
+
     const used = data.dailyDateCount || 0;
-    if (used >= defaults.defaultDailyDateCount) {
+
+    if (used >= limit) {
       throw new Error("DATE_LIMIT_REACHED");
     }
 
-    // ✅ FIXED duplicate check with data guard
     const dupQ = query(
       collection(db, "dateRequests"),
       where("fromUser", "==", fromUser.uid),
@@ -188,7 +200,6 @@ export async function sendDateRequest({
 
     tx.update(fromRef, { dailyDateCount: increment(1) });
 
-    // ✅ Fixed doc ID to match Firestore rule
     const ref = doc(db, "dateRequests", `${fromUser.uid}_${toUserId}`);
     tx.set(ref, {
       fromUser: fromUser.uid,
@@ -265,15 +276,25 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-async function getAdminDefaults() {
+async function getAdminLimits() {
   const snap = await getDoc(doc(db, "adminConfig", "defaults"));
+
   if (!snap.exists()) {
-    return { defaultDailyLikeCount: 10, defaultDailyDateCount: 10 };
+    return {
+      defaultDailyLikeCount: 10,
+      defaultDailyDateCount: 10,
+      premiumDailyLikeCount: 50,
+      premiumDailyDateCount: 50,
+    };
   }
+
   const d = snap.data();
+
   return {
     defaultDailyLikeCount: Number(d.defaultDailyLikeCount) || 10,
     defaultDailyDateCount: Number(d.defaultDailyDateCount) || 10,
+    premiumDailyLikeCount: Number(d.premiumDailyLikeCount) || 50,
+    premiumDailyDateCount: Number(d.premiumDailyDateCount) || 50,
   };
 }
 
