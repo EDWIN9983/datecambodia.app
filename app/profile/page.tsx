@@ -145,7 +145,7 @@ export default function EditProfilePage() {
         lastActive: serverTimestamp(),
       });
 
-      router.replace("/profile");
+      router.replace("/home");
     } catch (e: any) {
       setError(e?.message || "Failed to save profile");
     }
