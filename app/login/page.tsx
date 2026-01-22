@@ -9,6 +9,8 @@ import {
   GoogleAuthProvider,
   FacebookAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
@@ -41,7 +43,7 @@ export default function LoginPage() {
     []
   );
 
-  // Do NOT init Recaptcha here (prevents Next.js crash)
+  // Cleanup only — do NOT init Recaptcha here
   useEffect(() => {
     return () => {
       try {
@@ -51,12 +53,23 @@ export default function LoginPage() {
     };
   }, []);
 
+  // Handle Google redirect result (Safari fix)
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          router.replace("/auth-redirect");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
+
   async function sendCode() {
     setError(null);
     setLoading(true);
 
     try {
-      // Lazy init (Firebase + Next.js safe)
+      // Lazy init Recaptcha (Next.js safe)
       if (!window.recaptchaVerifier) {
         window.recaptchaVerifier = new (RecaptchaVerifier as any)(
           "recaptcha-container",
@@ -103,19 +116,20 @@ export default function LoginPage() {
 
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const ua = navigator.userAgent.toLowerCase();
+      const isSafari = ua.includes("safari") && !ua.includes("chrome");
 
-      try {
-        window.recaptchaVerifier?.clear();
-        delete window.recaptchaVerifier;
-      } catch {}
-
-      router.replace("/auth-redirect");
+      if (isSafari) {
+        await signInWithRedirect(auth, provider);
+        return;
+      } else {
+        await signInWithPopup(auth, provider);
+        router.replace("/auth-redirect");
+      }
     } catch (e: any) {
       setError(e?.message || "Google sign-in failed");
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function signInWithFacebook() {
