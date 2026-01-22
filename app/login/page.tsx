@@ -43,15 +43,7 @@ export default function LoginPage() {
     []
   );
 
-  useEffect(() => {
-    return () => {
-      try {
-        window.recaptchaVerifier?.clear();
-        delete window.recaptchaVerifier;
-      } catch {}
-    };
-  }, []);
-
+  // Handle Google redirect result (Safari fix)
   useEffect(() => {
     getRedirectResult(auth)
       .then((result) => {
@@ -68,11 +60,14 @@ export default function LoginPage() {
 
     try {
       if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(
-          auth,
-          "recaptcha-container",
-          { size: "invisible" }
-        );
+        const container = document.getElementById("recaptcha-container");
+        if (!container) {
+          throw new Error("reCAPTCHA container not ready");
+        }
+
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, container, {
+          size: "invisible",
+        });
       }
 
       const verifier = window.recaptchaVerifier!;
@@ -93,12 +88,6 @@ export default function LoginPage() {
 
     try {
       await confirm.confirm(code);
-
-      try {
-        window.recaptchaVerifier?.clear();
-        delete window.recaptchaVerifier;
-      } catch {}
-
       router.replace("/auth-redirect");
     } catch (e: any) {
       setError(e?.message || "Invalid verification code");
@@ -192,9 +181,7 @@ export default function LoginPage() {
               <h2 className="text-2xl font-extrabold text-gray-900">
                 Join DateCambodia
               </h2>
-              <p className="text-sm text-gray-700 mt-1">
-                Sign in to continue
-              </p>
+              <p className="text-sm text-gray-700 mt-1">Sign in to continue</p>
             </div>
 
             {step === "phone" ? (
