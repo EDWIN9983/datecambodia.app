@@ -11,7 +11,8 @@
   --text-main: #171717;
   --text-muted: #7a7a7a;
 
-  --primary: #e11d48; /* red */
+  /* Footer pink brand color */
+  --primary: #ff4da6;
 }
 
 /* =========================
@@ -48,6 +49,7 @@ body {
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @layer components {
   .app-card {
     background-color: var(--card-bg);
@@ -62,14 +64,55 @@ body {
     color: var(--text-muted);
   }
 
+  /* Base primary button */
   .app-primary {
     background-color: var(--primary);
     color: #ffffff;
+  }
+
+  /* Glowing primary button (NEW) */
+  .app-primary-glow {
+    background-color: var(--primary);
+    color: #ffffff;
+    box-shadow:
+      0 0 10px rgba(255, 77, 166, 0.5),
+      0 0 20px rgba(255, 77, 166, 0.35),
+      0 0 30px rgba(255, 77, 166, 0.25);
   }
 
   .app-input {
     background-color: var(--card-bg);
     color: var(--text-main);
     border: 1px solid var(--border-color);
+  }
+}
+@layer components {
+  /* Subtle pulse animation (for icons & buttons) */
+  .app-glow-pulse {
+    animation: glowPulse 2.8s ease-in-out infinite;
+  }
+
+  @keyframes glowPulse {
+    0% {
+      box-shadow:
+        0 0 6px rgba(255, 77, 166, 0.35),
+        0 0 12px rgba(255, 77, 166, 0.25);
+      opacity: 0.95;
+    }
+
+    50% {
+      box-shadow:
+        0 0 12px rgba(255, 77, 166, 0.6),
+        0 0 22px rgba(255, 77, 166, 0.45),
+        0 0 30px rgba(255, 77, 166, 0.3);
+      opacity: 1;
+    }
+
+    100% {
+      box-shadow:
+        0 0 6px rgba(255, 77, 166, 0.35),
+        0 0 12px rgba(255, 77, 166, 0.25);
+      opacity: 0.95;
+    }
   }
 }

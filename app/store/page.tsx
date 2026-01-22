@@ -146,10 +146,10 @@ export default function StorePage() {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <button className="rounded-2xl app-primary px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
+                      <button className="rounded-2xl app-primary glow-btn px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
               Buy 30 Days
             </button>
-            <button className="rounded-2xl app-primary px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
+                      <button className="rounded-2xl app-primary glow-btn px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
               Buy 90 Days
             </button>
           </div>

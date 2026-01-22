@@ -330,8 +330,7 @@ export default function DatesPage() {
                           ? `${r.fromUser}_${r.toUser}`
                           : `${r.toUser}_${r.fromUser}`)
                       }
-                      className="mt-2 w-full app-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
-                    >
+                      className="mt-2 w-full app-primary-glow app-glow-pulse rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"                    >
                       Reopen Chat · 50 Pulse
                     </button>
                   </div>
@@ -404,7 +403,7 @@ export default function DatesPage() {
                           ? `${r.fromUser}_${r.toUser}`
                           : `${r.toUser}_${r.fromUser}`)
                       }
-                      className="mt-2 w-full app-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                      className="mt-2 w-full app-primary-glow app-glow-pulse rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
                     >
                       Reopen Chat · 50 Pulse
                     </button>

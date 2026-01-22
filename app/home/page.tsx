@@ -328,7 +328,7 @@ export default function HomePage() {
 
           <Link
             href="/profile"
-            className="block w-full rounded-xl app-primary px-4 py-3 text-center font-semibold"
+              className="block w-full rounded-xl app-primary-glow app-glow-pulse px-4 py-3 text-center font-semibold"
           >
             Edit Profile
           </Link>

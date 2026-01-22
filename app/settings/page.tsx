@@ -441,8 +441,7 @@ export default function SettingsPage() {
             <button
               onClick={handleInstall}
               disabled={installing}
-              className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-            >
+              className="w-full app-primary-glow app-glow-pulse rounded-xl py-2 font-semibold disabled:opacity-50"            >
               {installing ? "Installing..." : "Install DateCambodia"}
             </button>
           </div>
@@ -460,7 +459,7 @@ export default function SettingsPage() {
           {phoneStage === "idle" ? (
             <div className="space-y-2">
               <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="New phone (+855...)" className="w-full app-input" />
-              <button onClick={sendPhoneCode} disabled={sendingSms} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+                          <button onClick={sendPhoneCode} disabled={sendingSms} className="w-full app-primary-glow app-glow-pulse rounded-xl py-2 font-semibold disabled:opacity-50">
                 {sendingSms ? "Sending..." : "Send verification code"}
               </button>
             </div>
@@ -468,7 +467,7 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <input value={smsCode} onChange={(e) => setSmsCode(e.target.value)} placeholder="Enter SMS code" className="w-full app-input" />
               <div className="flex gap-2">
-                <button onClick={confirmPhoneCode} disabled={verifyingSms} className="flex-1 app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+                                  <button onClick={confirmPhoneCode} disabled={verifyingSms} className="flex-1 app-primary-glow app-glow-pulse rounded-xl py-2 font-semibold disabled:opacity-50">
                   {verifyingSms ? "Verifying..." : "Confirm & update"}
                 </button>
                 <button onClick={() => { setPhoneStage("idle"); setSmsCode(""); setVerificationId(null); }} className="flex-1 app-card rounded-xl py-2 font-semibold app-text">
@@ -490,7 +489,7 @@ export default function SettingsPage() {
           </div>
 
           {!googleLinked ? (
-            <button onClick={linkGoogle} disabled={linkingGoogle} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+                      <button onClick={linkGoogle} disabled={linkingGoogle} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
               {linkingGoogle ? "Linking..." : "Link Google"}
             </button>
           ) : (
@@ -511,7 +510,7 @@ export default function SettingsPage() {
             <span>Hide country</span>
             <input type="checkbox" checked={hideCountry} onChange={(e) => setHideCountry(e.target.checked)} />
           </label>
-          <button onClick={savePrivacy} disabled={savingPrivacy} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+                  <button onClick={savePrivacy} disabled={savingPrivacy} className="w-full app-primary-glow app-glow-pulse rounded-xl py-2 font-semibold disabled:opacity-50">
             {savingPrivacy ? "Saving..." : "Save privacy"}
           </button>
         </div>
@@ -520,7 +519,7 @@ export default function SettingsPage() {
         <div className="app-card rounded-2xl p-4 space-y-3">
           <div className="text-sm font-semibold app-text">Name Change (One-time)</div>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New name" className="w-full app-input" disabled={!!me.usernameChangeUsed} />
-          <button onClick={saveNameOnce} disabled={savingName || !!me.usernameChangeUsed} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+                  <button onClick={saveNameOnce} disabled={savingName || !!me.usernameChangeUsed} className="w-full app-primary-glow app-glow-pulse rounded-xl py-2 font-semibold disabled:opacity-50">
             {me.usernameChangeUsed ? "Already used" : savingName ? "Updating..." : "Update name"}
           </button>
         </div>
@@ -557,9 +556,13 @@ export default function SettingsPage() {
           <div className="text-sm app-muted">
             Deactivate account (temporary).
           </div>
-          <button onClick={deactivateAccount} disabled={deactivating} className="w-full rounded-xl py-2 font-semibold text-white bg-red-600 disabled:opacity-50">
-            {deactivating ? "Deactivating..." : "Deactivate"}
-          </button>
+                  <button
+                      onClick={deactivateAccount}
+                      disabled={deactivating}
+                      className="w-full rounded-xl py-2 font-semibold text-white bg-red-600 app-glow-pulse disabled:opacity-50"
+                  >
+                      {deactivating ? "Deactivating..." : "Deactivate"}
+                  </button>
         </div>
 
         {toast && (

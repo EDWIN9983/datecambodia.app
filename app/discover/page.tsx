@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import PageShell from "@/components/PageShell";
 import {
@@ -289,15 +289,14 @@ function DiscoverInner({
               <div className="mt-1 text-[11px] app-muted">Pass</div>
             </button>
 
-            <button
-              disabled={busy}
-              onClick={like}
-              className="rounded-xl app-primary px-4 py-3 font-semibold"
-            >
-              ❤️
-              <div className="mt-1 text-[11px] text-white/90">Like</div>
-            </button>
-
+        <button
+         disabled={busy}
+         onClick={like}
+         className="rounded-xl app-primary-glow app-glow-pulse px-4 py-3 font-semibold"
+        >
+         ❤️
+         <div className="mt-1 text-[11px] text-white/90">Like</div>
+        </button>
             <button
               disabled={busy}
               onClick={() => setShowDate(true)}
