@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 export default function AuthRedirectPage() {
@@ -22,18 +22,8 @@ export default function AuthRedirectPage() {
 
       // 2️⃣ User document does NOT exist → profile setup
       if (!snap.exists()) {
-        await setDoc(ref, {
-          uid: user.uid,
-          phone: user.phoneNumber || "",
-          isAdmin: false,
-          isPremium: false,
-          isBanned: false,
-          dailyDateCount: 0,
-          lastReset: new Date().toISOString().slice(0, 10),
-          createdAt: serverTimestamp(),
-          lastActive: serverTimestamp(),
-        });
-
+        // ❌ DO NOT CREATE USER HERE
+        // ✅ User will be created ONLY after onboarding is completed
         router.replace("/profile-setup");
         return;
       }
@@ -46,7 +36,7 @@ export default function AuthRedirectPage() {
         return;
       }
 
-      // 4️⃣ Update last active
+      // 4️⃣ Update last active (safe, only for real users)
       await updateDoc(ref, {
         lastActive: serverTimestamp(),
       });
