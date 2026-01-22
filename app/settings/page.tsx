@@ -26,14 +26,9 @@ type SettingsUser = {
   createdAt?: any;
   isPremium?: boolean;
 
-  // Settings v1
   hideLastSeen?: boolean;
   hideCountry?: boolean;
-
-  // One-time change
   usernameChangeUsed?: boolean;
-
-  // Deactivate
   isDeactivated?: boolean;
   deactivatedAt?: any;
 };
@@ -63,21 +58,16 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
-
   const [toast, setToast] = useState<string | null>(null);
 
-  // Privacy toggles
   const [hideLastSeen, setHideLastSeen] = useState(false);
   const [hideCountry, setHideCountry] = useState(false);
 
-  // Name (one-time)
   const [newName, setNewName] = useState("");
   const [savingName, setSavingName] = useState(false);
 
-  // Google link
   const [linkingGoogle, setLinkingGoogle] = useState(false);
 
-  // Phone change flow
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const [phoneStage, setPhoneStage] = useState<"idle" | "code">("idle");
   const [newPhone, setNewPhone] = useState("");
@@ -86,14 +76,11 @@ export default function SettingsPage() {
   const [sendingSms, setSendingSms] = useState(false);
   const [verifyingSms, setVerifyingSms] = useState(false);
 
-  // Danger zone
   const [deactivating, setDeactivating] = useState(false);
 
-  // Blocked users
   const [blocked, setBlocked] = useState<string[]>([]);
   const [showBlocked, setShowBlocked] = useState(false);
 
-  // ✅ ONLY ADDITION: resolved display data (Name + Public ID)
   const [blockedView, setBlockedView] = useState<BlockedView[]>([]);
 
   const authedUser = auth.currentUser;
@@ -135,7 +122,6 @@ export default function SettingsPage() {
     return () => unsub();
   }, [router]);
 
-  // ✅ ONLY ADDITION: resolve blocked uid -> {name, publicId} for display
   useEffect(() => {
     async function resolveBlocked() {
       if (!blocked || blocked.length === 0) {
@@ -386,6 +372,15 @@ export default function SettingsPage() {
     }
   }
 
+  // ✅ INSTALL LOGIC (NEW — SAFE)
+  function triggerInstall() {
+    if ((window as any).deferredPrompt) {
+      (window as any).deferredPrompt.prompt();
+    } else {
+      setToast("Install not available on this device");
+    }
+  }
+
   if (loading || !uid || !me) return null;
 
   const createdText = me.createdAt?.toDate
@@ -421,6 +416,22 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ADD TO HOME SCREEN / INSTALL */}
+        <div className="app-card rounded-2xl p-4 space-y-3">
+          <div className="text-sm font-semibold app-text">App Shortcut</div>
+
+          <div className="text-sm app-muted">
+            Install DateCambodia for faster access from your home screen.
+          </div>
+
+          <button
+            onClick={triggerInstall}
+            className="w-full app-primary rounded-xl py-2 font-semibold"
+          >
+            Install DateCambodia
+          </button>
         </div>
 
         {/* PHONE */}
@@ -484,7 +495,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Needed for Firebase Recaptcha */}
           <div id="recaptcha-container" />
         </div>
 
@@ -551,8 +561,7 @@ export default function SettingsPage() {
           </button>
 
           <div className="text-xs app-muted">
-            (This only saves your preference. It does not change other pages
-            yet.)
+            (This only saves your preference. It does not change other pages yet.)
           </div>
         </div>
 
@@ -600,8 +609,8 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {showBlocked && (
-            blockedView.length === 0 ? (
+          {showBlocked &&
+            (blockedView.length === 0 ? (
               <div className="text-sm app-muted">No blocked users</div>
             ) : (
               blockedView.map((u) => (
@@ -622,8 +631,8 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))
-            )
-          )}
+            ))}
+
         </div>
 
         {/* DANGER ZONE */}

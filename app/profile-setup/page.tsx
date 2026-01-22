@@ -85,10 +85,6 @@ async function getAdminDefaults() {
   }
 }
 
-/* ===========================
-   🔔 NOTIFICATION HELPERS
-=========================== */
-
 async function notifyCoins(uid: string, amount: number) {
   if (!amount || amount <= 0) return;
 
@@ -176,6 +172,20 @@ export default function ProfileSetupPage() {
     return () => unsub();
   }, [router]);
 
+  // ✅ PWA INSTALL PROMPT FIX (NEW — SAFE)
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      (window as any).deferredPrompt = e;
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+    };
+  }, []);
+
   async function uploadPhoto(file: File): Promise<string> {
     const form = new FormData();
     form.append("file", file);
@@ -256,7 +266,6 @@ export default function ProfileSetupPage() {
         { merge: true }
       );
 
-      // 🔔 NOTIFICATIONS (ONLY HERE, ONLY ON MUTATION)
       await notifyCoins(uid, defaults.defaultCoinsA);
       if (coinBUntil) await notifyPremium(uid, coinBUntil);
 
