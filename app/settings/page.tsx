@@ -25,7 +25,6 @@ type SettingsUser = {
   phone?: string;
   createdAt?: any;
   isPremium?: boolean;
-
   hideLastSeen?: boolean;
   hideCountry?: boolean;
   usernameChangeUsed?: boolean;
@@ -49,6 +48,8 @@ function isGoogleLinked(user: any) {
   const arr = user?.providerData || [];
   return arr.some((p: any) => p?.providerId === "google.com");
 }
+
+let deferredPrompt: any = null;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -80,8 +81,10 @@ export default function SettingsPage() {
 
   const [blocked, setBlocked] = useState<string[]>([]);
   const [showBlocked, setShowBlocked] = useState(false);
-
   const [blockedView, setBlockedView] = useState<BlockedView[]>([]);
+
+  const [installAvailable, setInstallAvailable] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   const authedUser = auth.currentUser;
   const googleLinked = useMemo(
@@ -157,6 +160,43 @@ export default function SettingsPage() {
     const t = setTimeout(() => setToast(null), 1800);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // ✅ INSTALL PROMPT CAPTURE
+  useEffect(() => {
+    function handleBeforeInstallPrompt(e: any) {
+      e.preventDefault();
+      deferredPrompt = e;
+      setInstallAvailable(true);
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
+      );
+    };
+  }, []);
+
+  async function handleInstall() {
+    if (!deferredPrompt) {
+      setToast("Install not available on this device");
+      return;
+    }
+
+    setInstalling(true);
+    deferredPrompt.prompt();
+
+    const choiceResult = await deferredPrompt.userChoice;
+
+    if (choiceResult.outcome === "accepted") {
+      deferredPrompt = null;
+      setInstallAvailable(false);
+    }
+
+    setInstalling(false);
+  }
 
   async function savePrivacy() {
     if (!uid) return;
@@ -278,7 +318,6 @@ export default function SettingsPage() {
   function ensureRecaptcha() {
     if (recaptchaRef.current) return recaptchaRef.current;
 
-    // @ts-ignore
     recaptchaRef.current = new RecaptchaVerifier(auth, "recaptcha-container", {
       size: "invisible",
     });
@@ -297,7 +336,6 @@ export default function SettingsPage() {
 
     try {
       const verifier = ensureRecaptcha();
-
       const provider = new PhoneAuthProvider(auth);
       const vid = await provider.verifyPhoneNumber(phone, verifier);
 
@@ -372,15 +410,6 @@ export default function SettingsPage() {
     }
   }
 
-  // ✅ INSTALL LOGIC (NEW — SAFE)
-  function triggerInstall() {
-    if ((window as any).deferredPrompt) {
-      (window as any).deferredPrompt.prompt();
-    } else {
-      setToast("Install not available on this device");
-    }
-  }
-
   if (loading || !uid || !me) return null;
 
   const createdText = me.createdAt?.toDate
@@ -390,141 +419,82 @@ export default function SettingsPage() {
   return (
     <PageShell title="Settings">
       <div className="space-y-4">
+
         {/* ACCOUNT INFO */}
         <div className="app-card rounded-2xl p-4 space-y-2">
           <div className="text-sm font-semibold app-text">Account Info</div>
-
           <div className="text-sm app-muted">
-            <div>
-              <span className="font-medium app-text">User ID:</span> {uid}
+            <div><span className="font-medium app-text">User ID:</span> {uid}</div>
+            {me.publicId && <div><span className="font-medium app-text">Public ID:</span> {me.publicId}</div>}
+            {me.name && <div><span className="font-medium app-text">Name:</span> {me.name}</div>}
+            {createdText && <div><span className="font-medium app-text">Created:</span> {createdText}</div>}
+          </div>
+        </div>
+
+        {/* INSTALL APP */}
+        {installAvailable && (
+          <div className="app-card rounded-2xl p-4 space-y-3">
+            <div className="text-sm font-semibold app-text">App Shortcut</div>
+            <div className="text-sm app-muted">
+              Install DateCambodia for faster access from your home screen.
             </div>
-            {me.publicId && (
-              <div>
-                <span className="font-medium app-text">Public ID:</span>{" "}
-                {me.publicId}
-              </div>
-            )}
-            {me.name && (
-              <div>
-                <span className="font-medium app-text">Name:</span> {me.name}
-              </div>
-            )}
-            {createdText && (
-              <div>
-                <span className="font-medium app-text">Created:</span>{" "}
-                {createdText}
-              </div>
-            )}
+            <button
+              onClick={handleInstall}
+              disabled={installing}
+              className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
+            >
+              {installing ? "Installing..." : "Install DateCambodia"}
+            </button>
           </div>
-        </div>
-
-        {/* ADD TO HOME SCREEN / INSTALL */}
-        <div className="app-card rounded-2xl p-4 space-y-3">
-          <div className="text-sm font-semibold app-text">App Shortcut</div>
-
-          <div className="text-sm app-muted">
-            Install DateCambodia for faster access from your home screen.
-          </div>
-
-          <button
-            onClick={triggerInstall}
-            className="w-full app-primary rounded-xl py-2 font-semibold"
-          >
-            Install DateCambodia
-          </button>
-        </div>
+        )}
 
         {/* PHONE */}
         <div className="app-card rounded-2xl p-4 space-y-3">
           <div className="text-sm font-semibold app-text">Phone Number</div>
-
           <div className="text-sm app-muted">
-            Current:{" "}
-            <span className="app-text font-medium">
-              {maskPhone(me.phone || auth.currentUser?.phoneNumber || "") ||
-                "Not set"}
+            Current: <span className="app-text font-medium">
+              {maskPhone(me.phone || auth.currentUser?.phoneNumber || "") || "Not set"}
             </span>
           </div>
 
           {phoneStage === "idle" ? (
             <div className="space-y-2">
-              <input
-                value={newPhone}
-                onChange={(e) => setNewPhone(e.target.value)}
-                placeholder="New phone (e.g. +855...)"
-                className="w-full app-input"
-              />
-
-              <button
-                onClick={sendPhoneCode}
-                disabled={sendingSms}
-                className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-              >
+              <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="New phone (+855...)" className="w-full app-input" />
+              <button onClick={sendPhoneCode} disabled={sendingSms} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
                 {sendingSms ? "Sending..." : "Send verification code"}
               </button>
             </div>
           ) : (
             <div className="space-y-2">
-              <input
-                value={smsCode}
-                onChange={(e) => setSmsCode(e.target.value)}
-                placeholder="Enter SMS code"
-                className="w-full app-input"
-              />
-
+              <input value={smsCode} onChange={(e) => setSmsCode(e.target.value)} placeholder="Enter SMS code" className="w-full app-input" />
               <div className="flex gap-2">
-                <button
-                  onClick={confirmPhoneCode}
-                  disabled={verifyingSms}
-                  className="flex-1 app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-                >
+                <button onClick={confirmPhoneCode} disabled={verifyingSms} className="flex-1 app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
                   {verifyingSms ? "Verifying..." : "Confirm & update"}
                 </button>
-
-                <button
-                  onClick={() => {
-                    setPhoneStage("idle");
-                    setSmsCode("");
-                    setVerificationId(null);
-                  }}
-                  className="flex-1 app-card rounded-xl py-2 font-semibold app-text"
-                >
+                <button onClick={() => { setPhoneStage("idle"); setSmsCode(""); setVerificationId(null); }} className="flex-1 app-card rounded-xl py-2 font-semibold app-text">
                   Cancel
                 </button>
               </div>
             </div>
           )}
-
           <div id="recaptcha-container" />
         </div>
 
-        {/* GMAIL / GOOGLE */}
+        {/* GOOGLE */}
         <div className="app-card rounded-2xl p-4 space-y-3">
           <div className="text-sm font-semibold app-text">Gmail (Google)</div>
-
           <div className="text-sm app-muted">
-            Status:{" "}
-            <span className="app-text font-medium">
-              {googleLinked
-                ? `Linked (${auth.currentUser?.email || "email"})`
-                : "Not linked"}
+            Status: <span className="app-text font-medium">
+              {googleLinked ? `Linked (${auth.currentUser?.email || "email"})` : "Not linked"}
             </span>
           </div>
 
           {!googleLinked ? (
-            <button
-              onClick={linkGoogle}
-              disabled={linkingGoogle}
-              className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-            >
+            <button onClick={linkGoogle} disabled={linkingGoogle} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
               {linkingGoogle ? "Linking..." : "Link Google"}
             </button>
           ) : (
-            <button
-              onClick={switchGoogle}
-              disabled={linkingGoogle}
-              className="w-full app-card rounded-xl py-2 font-semibold app-text"
-            >
+            <button onClick={switchGoogle} disabled={linkingGoogle} className="w-full app-card rounded-xl py-2 font-semibold app-text">
               {linkingGoogle ? "Updating..." : "Change Google account"}
             </button>
           )}
@@ -533,78 +503,33 @@ export default function SettingsPage() {
         {/* PRIVACY */}
         <div className="app-card rounded-2xl p-4 space-y-3">
           <div className="text-sm font-semibold app-text">Privacy</div>
-
           <label className="flex items-center justify-between text-sm app-text">
             <span>Hide last seen</span>
-            <input
-              type="checkbox"
-              checked={hideLastSeen}
-              onChange={(e) => setHideLastSeen(e.target.checked)}
-            />
+            <input type="checkbox" checked={hideLastSeen} onChange={(e) => setHideLastSeen(e.target.checked)} />
           </label>
-
           <label className="flex items-center justify-between text-sm app-text">
             <span>Hide country</span>
-            <input
-              type="checkbox"
-              checked={hideCountry}
-              onChange={(e) => setHideCountry(e.target.checked)}
-            />
+            <input type="checkbox" checked={hideCountry} onChange={(e) => setHideCountry(e.target.checked)} />
           </label>
-
-          <button
-            onClick={savePrivacy}
-            disabled={savingPrivacy}
-            className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-          >
+          <button onClick={savePrivacy} disabled={savingPrivacy} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
             {savingPrivacy ? "Saving..." : "Save privacy"}
           </button>
-
-          <div className="text-xs app-muted">
-            (This only saves your preference. It does not change other pages yet.)
-          </div>
         </div>
 
         {/* ONE-TIME NAME CHANGE */}
         <div className="app-card rounded-2xl p-4 space-y-3">
-          <div className="text-sm font-semibold app-text">
-            Name Change (One-time)
-          </div>
-
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="New name"
-            className="w-full app-input"
-            disabled={!!me.usernameChangeUsed}
-          />
-
-          <button
-            onClick={saveNameOnce}
-            disabled={savingName || !!me.usernameChangeUsed}
-            className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50"
-          >
-            {me.usernameChangeUsed
-              ? "Already used"
-              : savingName
-              ? "Updating..."
-              : "Update name"}
+          <div className="text-sm font-semibold app-text">Name Change (One-time)</div>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New name" className="w-full app-input" disabled={!!me.usernameChangeUsed} />
+          <button onClick={saveNameOnce} disabled={savingName || !!me.usernameChangeUsed} className="w-full app-primary rounded-xl py-2 font-semibold disabled:opacity-50">
+            {me.usernameChangeUsed ? "Already used" : savingName ? "Updating..." : "Update name"}
           </button>
-
-          <div className="text-xs app-muted">
-            This is one-time and does not create any public history.
-          </div>
         </div>
 
         {/* BLOCKED USERS */}
         <div className="app-card rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold app-text">Blocked users</div>
-
-            <button
-              onClick={() => setShowBlocked((v) => !v)}
-              className="text-xs font-semibold app-text"
-            >
+            <button onClick={() => setShowBlocked((v) => !v)} className="text-xs font-semibold app-text">
               {showBlocked ? "Hide" : `View (${blocked.length})`}
             </button>
           </div>
@@ -616,38 +541,23 @@ export default function SettingsPage() {
               blockedView.map((u) => (
                 <div key={u.uid} className="flex justify-between items-center">
                   <span className="text-sm app-text">
-                    {u.name ? u.name : "User"}
-                    {u.publicId ? ` (${u.publicId})` : ""}
+                    {u.name ? u.name : "User"}{u.publicId ? ` (${u.publicId})` : ""}
                   </span>
-
-                  <button
-                    onClick={async () => {
-                      await unblockUser(uid!, u.uid);
-                      setBlocked((b) => b.filter((x) => x !== u.uid));
-                    }}
-                    className="text-xs text-red-500 font-semibold"
-                  >
+                  <button onClick={async () => { await unblockUser(uid!, u.uid); setBlocked((b) => b.filter((x) => x !== u.uid)); }} className="text-xs text-red-500 font-semibold">
                     Unblock
                   </button>
                 </div>
               ))
             ))}
-
         </div>
 
         {/* DANGER ZONE */}
         <div className="app-card rounded-2xl p-4 space-y-3 border border-red-200">
           <div className="text-sm font-semibold text-red-600">Danger Zone</div>
-
           <div className="text-sm app-muted">
-            Deactivate account (temporary). You can add re-activate flow later.
+            Deactivate account (temporary).
           </div>
-
-          <button
-            onClick={deactivateAccount}
-            disabled={deactivating}
-            className="w-full rounded-xl py-2 font-semibold text-white bg-red-600 disabled:opacity-50"
-          >
+          <button onClick={deactivateAccount} disabled={deactivating} className="w-full rounded-xl py-2 font-semibold text-white bg-red-600 disabled:opacity-50">
             {deactivating ? "Deactivating..." : "Deactivate"}
           </button>
         </div>
