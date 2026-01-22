@@ -43,7 +43,6 @@ export default function LoginPage() {
     []
   );
 
-  // Cleanup only — do NOT init Recaptcha here
   useEffect(() => {
     return () => {
       try {
@@ -53,7 +52,6 @@ export default function LoginPage() {
     };
   }, []);
 
-  // Handle Google redirect result (Safari fix)
   useEffect(() => {
     getRedirectResult(auth)
       .then((result) => {
@@ -69,12 +67,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Lazy init Recaptcha (Next.js safe)
       if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new (RecaptchaVerifier as any)(
+        window.recaptchaVerifier = new RecaptchaVerifier(
+          auth,
           "recaptcha-container",
-          { size: "invisible" },
-          auth
+          { size: "invisible" }
         );
       }
 
