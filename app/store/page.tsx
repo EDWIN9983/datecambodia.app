@@ -57,60 +57,68 @@ export default function StorePage() {
 
   return (
     <PageShell title="Store">
-      <div className="space-y-4">
+      <div className="space-y-6">
 
         {/* HERO */}
-        <div className="rounded-2xl app-card p-5">
-          <div className="text-lg font-semibold app-text">
-            Upgrade your experience
+        <div className="rounded-3xl app-card p-6 text-center">
+          <div className="text-xl font-semibold app-text">
+            💖 Unlock Your Dating Power
           </div>
 
-          <div className="mt-1 text-sm app-muted">
-            Premium for limits • Pulses for extra actions
+          <div className="mt-2 text-sm app-muted">
+            Go premium to send unlimited likes, more date requests, and connect faster with real matches.
           </div>
 
-          <div className="mt-4 flex justify-center">
-            <img
-              src="/heart.svg"
-              alt="Premium"
-              className="h-20 sm:h-24 md:h-28 w-auto
-                         drop-shadow-[0_8px_14px_rgba(0,0,0,0.45)]"
-            />
+          {/* SOCIAL PROOF MOCK */}
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-pink-500 to-red-500 flex items-center justify-center text-white font-semibold">
+              U
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-semibold app-text">
+                User_4821 activated Premium
+              </div>
+              <div className="text-xs app-muted">
+                30 days of unlimited dating power
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-6 grid grid-cols-2 gap-4">
 
             {/* PREMIUM STATUS */}
-            <div className="rounded-xl app-card p-3">
-              <div className="flex items-center gap-2 text-sm app-text">
-                <img src="/heart.svg" className="h-4 w-auto" />
-                <span className="font-semibold">Premium</span>
+            <div className="relative rounded-2xl app-card p-4 border border-pink-400/40">
+              <div className="absolute -top-2 -right-2 rounded-full bg-pink-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                VIP
               </div>
 
-              <div className="mt-1 text-sm app-text">
+              <div className="flex items-center justify-center gap-2 text-sm app-text">
+                <span className="font-semibold">Premium Member</span>
+              </div>
+
+              <div className="mt-2 text-sm font-semibold text-pink-400">
                 {premiumActive ? "Active" : "Inactive"}
               </div>
 
               {premiumActive && premiumUntil && (
                 <div className="mt-1 text-xs app-muted">
-                  Expires {formatDate(premiumUntil)}
+                  Active until {formatDate(premiumUntil)}
                 </div>
               )}
             </div>
 
             {/* PULSES */}
-            <div className="rounded-xl app-card p-3">
-              <div className="flex items-center gap-2 text-sm app-text">
-                <img src="/pulse.svg" className="h-4 w-auto" />
-                <span className="font-semibold">Pulses</span>
+            <div className="rounded-2xl app-card p-4">
+              <div className="flex items-center justify-center gap-2 text-sm app-text">
+                <span className="font-semibold">Your Pulses</span>
               </div>
 
-              <div className="mt-1 text-sm app-text">
+              <div className="mt-2 text-lg font-semibold text-yellow-400">
                 {me.coinsA ?? 0}
               </div>
 
               <div className="mt-1 text-xs app-muted">
-                Extra likes, requests, messages
+                Extra likes, date requests & messages
               </div>
             </div>
 
@@ -118,71 +126,58 @@ export default function StorePage() {
         </div>
 
         {/* PREMIUM BUY */}
-        <div className="rounded-2xl app-card p-5">
+        <div className="rounded-3xl app-card p-6">
           <div className="flex items-center gap-2">
-            <img src="/heart.svg" className="h-5 w-auto" />
-            <div className="text-base font-semibold app-text">
-              Premium (Heart)
+            <div className="text-lg font-semibold app-text">
+              🌟 Premium Access
             </div>
           </div>
 
           <div className="mt-2 text-sm app-muted">
-            Removes limits and pulse costs.
+            Remove limits. Match faster. Get more attention.
           </div>
 
-          <div className="mt-3 space-y-2 text-sm app-text">
-            <div className="flex justify-between">
-              <span>Likes per day</span>
-              <span className="font-semibold">99</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Date requests</span>
-              <span className="font-semibold">15</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Profile visitors</span>
-              <span className="font-semibold">Free</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Messages</span>
-              <span className="font-semibold">Higher</span>
-            </div>
+          <div className="mt-4 space-y-2 text-sm app-text">
+            <div>❤️ Unlimited Likes</div>
+            <div>📅 More Date Requests</div>
+            <div>👀 See Who Viewed You</div>
+            <div>💬 Send More Messages</div>
+            <div>⚡ Faster Matching</div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button className="rounded-xl app-primary px-4 py-2 text-sm font-semibold">
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button className="rounded-2xl app-primary px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
               Buy 30 Days
             </button>
-            <button className="rounded-xl app-primary px-4 py-2 text-sm font-semibold">
+            <button className="rounded-2xl app-primary px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition">
               Buy 90 Days
             </button>
           </div>
         </div>
 
         {/* PULSES BUY */}
-        <div className="rounded-2xl app-card p-5">
+        <div className="rounded-3xl app-card p-6">
           <div className="flex items-center gap-2">
-            <img src="/pulse.svg" className="h-5 w-auto" />
-            <div className="text-base font-semibold app-text">
-              Pulses
+            <div className="text-lg font-semibold app-text">
+              ⚡ Power Boosts
             </div>
           </div>
 
           <div className="mt-2 text-sm app-muted">
-            Go beyond daily limits when it matters.
+            Use Pulses to go beyond daily limits when it matters most.
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button className="rounded-xl app-card px-4 py-2 text-sm font-semibold app-text">
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
               +10 Pulses
             </button>
-            <button className="rounded-xl app-card px-4 py-2 text-sm font-semibold app-text">
+            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
               +50 Pulses
             </button>
-            <button className="rounded-xl app-card px-4 py-2 text-sm font-semibold app-text">
+            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
               +100 Pulses
             </button>
-            <button className="rounded-xl app-card px-4 py-2 text-sm font-semibold app-text">
+            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
               +500 Pulses
             </button>
           </div>
