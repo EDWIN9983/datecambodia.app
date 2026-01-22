@@ -23,12 +23,10 @@ export type UserDoc = {
   gender?: string;
   photos?: string[];
   isAdmin?: boolean;
-  isPremium?: boolean;
-  dailyDateCount?: number;
-  dailyLikeCount?: number;
+  isPremium?: boolean; // legacy UI-only
+  dailyDateCount?: number; // SINGLE counter
+  dailyLikeCount?: number; // SINGLE counter
   lastReset?: any;
-  lastLikeReset?: any;
-  lastDiscoverReset?: any;
   viewedToday?: string[];
   isBanned?: boolean;
   coinsA?: number;
@@ -89,16 +87,71 @@ export async function listDiscoverUsers({
 
   return snap.docs
     .map((d) => d.data() as UserDoc)
-    .filter(
-      (u) =>
-        u.uid !== currentUid &&
-        !u.isBanned
-    );
+    .filter((u) => u.uid !== currentUid && !u.isBanned);
 }
 
 /* =========================
-   TEMP LIKE MODE (SAFE)
+   DAILY RESET (CRITICAL)
 ========================= */
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+async function ensureDailyReset(tx: any, userRef: any, data: any) {
+  const last = data.lastReset?.toDate?.()?.getTime() || 0;
+
+  if (last >= startOfToday()) return;
+
+  tx.update(userRef, {
+    dailyLikeCount: 0,
+    dailyDateCount: 0,
+    lastReset: serverTimestamp(),
+  });
+}
+
+/* =========================
+   PREMIUM CHECK
+========================= */
+
+function isPremiumActive(user: any) {
+  const until = user?.coinBUntil;
+  if (!until) return false;
+  if (typeof until?.toDate === "function") {
+    return until.toDate().getTime() > Date.now();
+  }
+  return false;
+}
+
+/* =========================
+   ADMIN LIMITS
+========================= */
+
+async function getAdminLimits() {
+  const snap = await getDoc(doc(db, "adminConfig", "defaults"));
+  if (!snap.exists()) {
+    return {
+      defaultDailyLikeCount: 10,
+      premiumDailyLikeCount: 50,
+      defaultDailyDateCount: 10,
+      premiumDailyDateCount: 50,
+    };
+  }
+  const d = snap.data();
+  return {
+    defaultDailyLikeCount: Number(d.defaultDailyLikeCount) || 10,
+    premiumDailyLikeCount: Number(d.premiumDailyLikeCount) || 50,
+    defaultDailyDateCount: Number(d.defaultDailyDateCount) || 10,
+    premiumDailyDateCount: Number(d.premiumDailyDateCount) || 50,
+  };
+}
+
+/* =========================
+   LIKE (2-COUNTER MODEL)
+========================= */
+
 export async function likeUser(fromUid: string, toUid: string) {
   const limits = await getAdminLimits();
 
@@ -115,24 +168,21 @@ export async function likeUser(fromUid: string, toUid: string) {
 
     const from = fromSnap.data();
 
+    // 🔥 FIX — reset first
     await ensureDailyReset(tx, fromRef, from);
 
-    const now = Date.now();
-    const isPremium =
-      from.coinBUntil?.toDate?.()?.getTime() > now;
+    const used = from.dailyLikeCount || 0;
+    const premium = isPremiumActive(from);
 
-    const limit = isPremium
+    const limit = premium
       ? limits.premiumDailyLikeCount
       : limits.defaultDailyLikeCount;
-
-    const used = from.dailyLikeCount || 0;
 
     if (used >= limit) {
       throw new Error("LIKE_LIMIT_REACHED");
     }
 
     tx.update(fromRef, { dailyLikeCount: increment(1) });
-
     tx.update(toRef, { likesCount: increment(1) });
 
     const likeRef = doc(collection(db, "likes"));
@@ -143,6 +193,10 @@ export async function likeUser(fromUid: string, toUid: string) {
     });
   });
 }
+
+/* =========================
+   DATE REQUEST (2-COUNTER)
+========================= */
 
 export async function sendDateRequest({
   fromUser,
@@ -168,17 +222,15 @@ export async function sendDateRequest({
 
     const data = fromSnap.data();
 
+    // 🔥 FIX — reset first
     await ensureDailyReset(tx, fromRef, data);
 
-    const now = Date.now();
-    const isPremium =
-      data.coinBUntil?.toDate?.()?.getTime() > now;
+    const used = data.dailyDateCount || 0;
+    const premium = isPremiumActive(data);
 
-    const limit = isPremium
+    const limit = premium
       ? limits.premiumDailyDateCount
       : limits.defaultDailyDateCount;
-
-    const used = data.dailyDateCount || 0;
 
     if (used >= limit) {
       throw new Error("DATE_LIMIT_REACHED");
@@ -191,7 +243,6 @@ export async function sendDateRequest({
     );
 
     const dupSnap = await getDocs(dupQ);
-
     const hasPending = dupSnap.docs.some(
       (d) => d.data().status === "pending"
     );
@@ -213,6 +264,10 @@ export async function sendDateRequest({
     });
   });
 }
+
+/* =========================
+   MISC
+========================= */
 
 export async function updateUserPhoto(photoUrl: string) {
   const user = auth.currentUser;
@@ -241,7 +296,6 @@ export async function getBlockedUserIds(uid: string): Promise<string[]> {
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data().toUid);
 }
-
 /* ======================= VIEW TRACKING ======================= */
 export async function markViewed(uid: string, viewedUid: string) {
   const ref = doc(db, "users", uid);
@@ -276,41 +330,3 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-async function getAdminLimits() {
-  const snap = await getDoc(doc(db, "adminConfig", "defaults"));
-
-  if (!snap.exists()) {
-    return {
-      defaultDailyLikeCount: 10,
-      defaultDailyDateCount: 10,
-      premiumDailyLikeCount: 50,
-      premiumDailyDateCount: 50,
-    };
-  }
-
-  const d = snap.data();
-
-  return {
-    defaultDailyLikeCount: Number(d.defaultDailyLikeCount) || 10,
-    defaultDailyDateCount: Number(d.defaultDailyDateCount) || 10,
-    premiumDailyLikeCount: Number(d.premiumDailyLikeCount) || 50,
-    premiumDailyDateCount: Number(d.premiumDailyDateCount) || 50,
-  };
-}
-
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-async function ensureDailyReset(tx: any, userRef: any, data: any) {
-  const last = data.lastReset?.toDate?.()?.getTime() || 0;
-  if (last >= startOfToday()) return;
-
-  tx.update(userRef, {
-    dailyLikeCount: 0,
-    dailyDateCount: 0,
-    lastReset: serverTimestamp(),
-  });
-}
