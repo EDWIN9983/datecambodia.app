@@ -21,10 +21,48 @@ import { auth, db } from "@/lib/firebase";
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
 
+/* 🔧 MERGED NATIONALITY LIST (PRODUCTION) */
 const NATIONALITIES = [
-  "Cambodian","Thai","Vietnamese","Chinese","Korean","Japanese","Indian",
-  "Filipino","Malaysian","Singaporean","Indonesian","Australian",
-  "French","German","British","American","Canadian","Other",
+  // 🇰🇭 Cambodia + Neighbors
+  "Cambodian",
+  "Thai",
+  "Vietnamese",
+  "Lao",
+  "Myanmar",
+
+  // 🇨🇳 East Asia
+  "Chinese",
+  "Korean",
+  "Japanese",
+
+  // 🇮🇳 South Asia
+  "Indian",
+  "Pakistani",
+  "Bangladeshi",
+  "Sri Lankan",
+  "Nepali",
+
+  // 🇵🇭 Southeast Asia
+  "Filipino",
+  "Malaysian",
+  "Singaporean",
+  "Indonesian",
+
+  // 🇦🇪 Middle East
+  "Emirati (UAE)",
+  "Saudi",
+  "Qatari",
+  "Kuwaiti",
+  "Omani",
+  "Bahraini",
+
+  // 🌍 Western
+  "Australian",
+  "American",
+  "Canadian",
+  "British",
+  "French",
+  "German",
 ];
 
 const CAMBODIA_CITIES = [
@@ -172,7 +210,6 @@ export default function ProfileSetupPage() {
     return () => unsub();
   }, [router]);
 
-  // ✅ PWA INSTALL PROMPT FIX (NEW — SAFE)
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
@@ -256,8 +293,8 @@ export default function ProfileSetupPage() {
           isPremium: !!coinBUntil,
           isBanned: false,
           coinsA: defaults.defaultCoinsA,
-          dailyLikeCount: defaults.defaultDailyLikeCount,
-          dailyDateCount: defaults.defaultDailyDateCount,
+          dailyLikeCount: 0,
+          dailyDateCount: 0,
           coinBUntil,
           lastReset: serverTimestamp(),
           createdAt: serverTimestamp(),

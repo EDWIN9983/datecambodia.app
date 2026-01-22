@@ -3,11 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  doc,
-  getDocFromServer,
-  Timestamp,
-} from "firebase/firestore";
+import { doc, getDocFromServer, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/useAuth";
 import { db } from "@/lib/firebase";
 import PageShell from "@/components/PageShell";
@@ -30,7 +26,6 @@ type UserProfile = {
   isBanned?: boolean;
   dailyDateCount?: number;
   dailyLikeCount?: number;
-  lastReset?: any;
 };
 
 function calcAge(dob?: string) {
@@ -43,26 +38,50 @@ function calcAge(dob?: string) {
   return age;
 }
 
+/* 🔧 UPDATED FLAG MAP (MATCHES PROFILE SETUP + PUBLIC PROFILE) */
 function countryFlag(nationality?: string) {
   if (!nationality) return "🌍";
   const map: Record<string, string> = {
+    // 🇰🇭 Cambodia + Neighbors
     Cambodian: "🇰🇭",
     Thai: "🇹🇭",
     Vietnamese: "🇻🇳",
+    Lao: "🇱🇦",
+    Myanmar: "🇲🇲",
+
+    // 🇨🇳 East Asia
     Chinese: "🇨🇳",
     Korean: "🇰🇷",
     Japanese: "🇯🇵",
+
+    // 🇮🇳 South Asia
     Indian: "🇮🇳",
+    Pakistani: "🇵🇰",
+    Bangladeshi: "🇧🇩",
+    "Sri Lankan": "🇱🇰",
+    Nepali: "🇳🇵",
+
+    // 🇵🇭 Southeast Asia
     Filipino: "🇵🇭",
     Malaysian: "🇲🇾",
     Singaporean: "🇸🇬",
     Indonesian: "🇮🇩",
+
+    // 🇦🇪 Middle East
+    "Emirati (UAE)": "🇦🇪",
+    Saudi: "🇸🇦",
+    Qatari: "🇶🇦",
+    Kuwaiti: "🇰🇼",
+    Omani: "🇴🇲",
+    Bahraini: "🇧🇭",
+
+    // 🌍 Western
     Australian: "🇦🇺",
-    French: "🇫🇷",
-    German: "🇩🇪",
-    British: "🇬🇧",
     American: "🇺🇸",
     Canadian: "🇨🇦",
+    British: "🇬🇧",
+    French: "🇫🇷",
+    German: "🇩🇪",
   };
   return map[nationality] || "🌍";
 }
@@ -94,10 +113,8 @@ export default function HomePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // 🔧 STORE BOTH LIMITS
   const [defaultDailyDateLimit, setDefaultDailyDateLimit] = useState(10);
   const [premiumDailyDateLimit, setPremiumDailyDateLimit] = useState(50);
-
   const [defaultDailyLikeLimit, setDefaultDailyLikeLimit] = useState(10);
   const [premiumDailyLikeLimit, setPremiumDailyLikeLimit] = useState(50);
 
@@ -136,21 +153,18 @@ export default function HomePage() {
 
         setProfile({ ...data, uid: user.uid });
 
-        // 🔧 FETCH BOTH DEFAULT + PREMIUM LIMITS
         const adminSnap = await getDocFromServer(
           doc(db, "adminConfig", "defaults")
         );
 
         if (adminSnap.exists()) {
           const adminData = adminSnap.data();
-
           setDefaultDailyDateLimit(
             Number(adminData.defaultDailyDateCount) || 10
           );
           setPremiumDailyDateLimit(
             Number(adminData.premiumDailyDateCount) || 50
           );
-
           setDefaultDailyLikeLimit(
             Number(adminData.defaultDailyLikeCount) || 10
           );
@@ -171,48 +185,14 @@ export default function HomePage() {
   const likes = likesBadge(profile.likesCount || 0);
   const subtitle = subtitleFromInterests(profile.interests);
 
-  // 🔧 DAILY RESET UI FIX
-  const now = new Date();
-  const lastResetDate = profile.lastReset?.toDate?.();
+  const usedDates = profile.dailyDateCount || 0;
+  const usedLikes = profile.dailyLikeCount || 0;
 
-  function isSameDay(a: Date, b: Date) {
-    return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
-  }
+  const defaultDateUsed = Math.min(usedDates, defaultDailyDateLimit);
+  const premiumDateUsed = Math.max(0, usedDates - defaultDailyDateLimit);
 
-  const effectiveDailyDateCount =
-    lastResetDate && isSameDay(lastResetDate, now)
-      ? profile.dailyDateCount || 0
-      : 0;
-
-  const effectiveDailyLikeCount =
-    lastResetDate && isSameDay(lastResetDate, now)
-      ? profile.dailyLikeCount || 0
-      : 0;
-
-  // 🔧 SPLIT QUOTAS
-  const defaultDateUsed = Math.min(
-    effectiveDailyDateCount,
-    defaultDailyDateLimit
-  );
-
-  const premiumDateUsed = Math.max(
-    0,
-    effectiveDailyDateCount - defaultDailyDateLimit
-  );
-
-  const defaultLikeUsed = Math.min(
-    effectiveDailyLikeCount,
-    defaultDailyLikeLimit
-  );
-
-  const premiumLikeUsed = Math.max(
-    0,
-    effectiveDailyLikeCount - defaultDailyLikeLimit
-  );
+  const defaultLikeUsed = Math.min(usedLikes, defaultDailyLikeLimit);
+  const premiumLikeUsed = Math.max(0, usedLikes - defaultDailyLikeLimit);
 
   return (
     <PageShell title="My Profile">
@@ -300,65 +280,50 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          {/* 🔧 V2 UI LIMITS */}
-          <div className="text-sm app-muted space-y-2">
-            <div className="font-semibold app-text">
-              Date requests today
-            </div>
-
+          <div className="text-sm app-muted space-y-1">
             <div>
-              Default:{" "}
-              <span className="app-text">
-                {defaultDateUsed} / {defaultDailyDateLimit}
-              </span>
-            </div>
-
-            {premiumActive ? (
-              <div>
-                Premium bonus:{" "}
+              Date requests today:
+              <div className="ml-2">
+                Default:{" "}
                 <span className="app-text">
-                  {premiumDateUsed} /{" "}
-                  {Math.max(
-                    0,
-                    premiumDailyDateLimit -
-                      defaultDailyDateLimit
-                  )}
+                  {defaultDateUsed} / {defaultDailyDateLimit}
                 </span>
               </div>
-            ) : (
-              <div className="text-xs text-pink-600">
-                💖 Upgrade to send more date requests
-              </div>
-            )}
-
-            <div className="pt-2 font-semibold app-text">
-              Likes today
+              {premiumActive ? (
+                <div className="ml-2">
+                  Premium bonus:{" "}
+                  <span className="app-text">
+                    {premiumDateUsed} / {premiumDailyDateLimit}
+                  </span>
+                </div>
+              ) : (
+                <div className="ml-2 app-muted text-xs">
+                  Unlock Premium to get more dates ❤️
+                </div>
+              )}
             </div>
 
-            <div>
-              Default:{" "}
-              <span className="app-text">
-                {defaultLikeUsed} / {defaultDailyLikeLimit}
-              </span>
-            </div>
-
-            {premiumActive ? (
-              <div>
-                Premium bonus:{" "}
+            <div className="mt-2">
+              Likes today:
+              <div className="ml-2">
+                Default:{" "}
                 <span className="app-text">
-                  {premiumLikeUsed} /{" "}
-                  {Math.max(
-                    0,
-                    premiumDailyLikeLimit -
-                      defaultDailyLikeLimit
-                  )}
+                  {defaultLikeUsed} / {defaultDailyLikeLimit}
                 </span>
               </div>
-            ) : (
-              <div className="text-xs text-pink-600">
-                🔓 Unlock premium to get extra likes
-              </div>
-            )}
+              {premiumActive ? (
+                <div className="ml-2">
+                  Premium bonus:{" "}
+                  <span className="app-text">
+                    {premiumLikeUsed} / {premiumDailyLikeLimit}
+                  </span>
+                </div>
+              ) : (
+                <div className="ml-2 app-muted text-xs">
+                  Unlock Premium to get more likes ❤️
+                </div>
+              )}
+            </div>
           </div>
 
           <Link

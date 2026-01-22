@@ -36,26 +36,50 @@ function calcAge(dob: string) {
   return age;
 }
 
+/* 🔧 UPDATED FLAG MAP (MATCHES HOME + ONBOARDING) */
 function countryFlag(nationality?: string) {
   if (!nationality) return "🌍";
   const map: Record<string, string> = {
+    // 🇰🇭 Cambodia + Neighbors
     Cambodian: "🇰🇭",
     Thai: "🇹🇭",
     Vietnamese: "🇻🇳",
+    Lao: "🇱🇦",
+    Myanmar: "🇲🇲",
+
+    // 🇨🇳 East Asia
     Chinese: "🇨🇳",
     Korean: "🇰🇷",
     Japanese: "🇯🇵",
+
+    // 🇮🇳 South Asia
     Indian: "🇮🇳",
+    Pakistani: "🇵🇰",
+    Bangladeshi: "🇧🇩",
+    "Sri Lankan": "🇱🇰",
+    Nepali: "🇳🇵",
+
+    // 🇵🇭 Southeast Asia
     Filipino: "🇵🇭",
     Malaysian: "🇲🇾",
     Singaporean: "🇸🇬",
     Indonesian: "🇮🇩",
+
+    // 🇦🇪 Middle East
+    "Emirati (UAE)": "🇦🇪",
+    Saudi: "🇸🇦",
+    Qatari: "🇶🇦",
+    Kuwaiti: "🇰🇼",
+    Omani: "🇴🇲",
+    Bahraini: "🇧🇭",
+
+    // 🌍 Western
     Australian: "🇦🇺",
-    French: "🇫🇷",
-    German: "🇩🇪",
-    British: "🇬🇧",
     American: "🇺🇸",
     Canadian: "🇨🇦",
+    British: "🇬🇧",
+    French: "🇫🇷",
+    German: "🇩🇪",
   };
   return map[nationality] || "🌍";
 }
@@ -86,7 +110,8 @@ function formatLastSeen(ts: any) {
 
 function subtitleFromInterests(interests?: string[]) {
   const list = interests || [];
-  const hasShortStay = list.includes("Short stay") || list.includes("Just visiting");
+  const hasShortStay =
+    list.includes("Short stay") || list.includes("Just visiting");
   if (hasShortStay) return "Short stay · Open to meet";
   return "Here for fun & good vibes";
 }
@@ -130,7 +155,10 @@ export default function PublicProfilePage() {
     })();
   }, [uid, router]);
 
-  const age = useMemo(() => (user?.dob ? calcAge(user.dob) : null), [user?.dob]);
+  const age = useMemo(
+    () => (user?.dob ? calcAge(user.dob) : null),
+    [user?.dob]
+  );
 
   if (loading || !user) return null;
 
@@ -164,7 +192,10 @@ export default function PublicProfilePage() {
                 </div>
               </>
             ) : (
-              <img src={photos[0]} className="w-full h-[420px] object-cover" />
+              <img
+                src={photos[0]}
+                className="w-full h-[420px] object-cover"
+              />
             )
           ) : (
             <div className="h-[420px] flex items-center justify-center app-muted text-sm">
@@ -205,7 +236,9 @@ export default function PublicProfilePage() {
           </div>
 
           <div className="text-xs app-muted flex flex-wrap gap-x-3 gap-y-1">
-            {user.lastActive && <span>{formatLastSeen(user.lastActive)}</span>}
+            {user.lastActive && (
+              <span>{formatLastSeen(user.lastActive)}</span>
+            )}
             <span>Looking for {user.lookingFor}</span>
           </div>
 
@@ -233,7 +266,10 @@ export default function PublicProfilePage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {user.interests.map((i) => (
-                <span key={i} className="rounded-full border px-3 py-1 text-xs app-text">
+                <span
+                  key={i}
+                  className="rounded-full border px-3 py-1 text-xs app-text"
+                >
                   {i}
                 </span>
               ))}
