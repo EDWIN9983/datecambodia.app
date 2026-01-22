@@ -6,12 +6,6 @@ import Link from "next/link";
 import {
   doc,
   getDocFromServer,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
   Timestamp,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/useAuth";
@@ -35,6 +29,8 @@ type UserProfile = {
   isAdmin?: boolean;
   isBanned?: boolean;
   dailyDateCount?: number;
+  dailyLikeCount?: number;
+  lastReset?: any;
 };
 
 function calcAge(dob?: string) {
@@ -97,7 +93,13 @@ export default function HomePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [adminDailyDateLimit, setAdminDailyDateLimit] = useState(10);
+
+  // 🔧 STORE BOTH LIMITS
+  const [defaultDailyDateLimit, setDefaultDailyDateLimit] = useState(10);
+  const [premiumDailyDateLimit, setPremiumDailyDateLimit] = useState(50);
+
+  const [defaultDailyLikeLimit, setDefaultDailyLikeLimit] = useState(10);
+  const [premiumDailyLikeLimit, setPremiumDailyLikeLimit] = useState(50);
 
   const premiumActive = useMemo(() => {
     if (!profile?.coinBUntil) return false;
@@ -134,10 +136,27 @@ export default function HomePage() {
 
         setProfile({ ...data, uid: user.uid });
 
-        const adminSnap = await getDocFromServer(doc(db, "adminConfig", "defaults"));
+        // 🔧 FETCH BOTH DEFAULT + PREMIUM LIMITS
+        const adminSnap = await getDocFromServer(
+          doc(db, "adminConfig", "defaults")
+        );
+
         if (adminSnap.exists()) {
           const adminData = adminSnap.data();
-          setAdminDailyDateLimit(Number(adminData.dailyDateCount) || 10);
+
+          setDefaultDailyDateLimit(
+            Number(adminData.defaultDailyDateCount) || 10
+          );
+          setPremiumDailyDateLimit(
+            Number(adminData.premiumDailyDateCount) || 50
+          );
+
+          setDefaultDailyLikeLimit(
+            Number(adminData.defaultDailyLikeCount) || 10
+          );
+          setPremiumDailyLikeLimit(
+            Number(adminData.premiumDailyLikeCount) || 50
+          );
         }
       } finally {
         setProfileLoading(false);
@@ -151,6 +170,49 @@ export default function HomePage() {
   const age = calcAge(profile.dob);
   const likes = likesBadge(profile.likesCount || 0);
   const subtitle = subtitleFromInterests(profile.interests);
+
+  // 🔧 DAILY RESET UI FIX
+  const now = new Date();
+  const lastResetDate = profile.lastReset?.toDate?.();
+
+  function isSameDay(a: Date, b: Date) {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  const effectiveDailyDateCount =
+    lastResetDate && isSameDay(lastResetDate, now)
+      ? profile.dailyDateCount || 0
+      : 0;
+
+  const effectiveDailyLikeCount =
+    lastResetDate && isSameDay(lastResetDate, now)
+      ? profile.dailyLikeCount || 0
+      : 0;
+
+  // 🔧 SPLIT QUOTAS
+  const defaultDateUsed = Math.min(
+    effectiveDailyDateCount,
+    defaultDailyDateLimit
+  );
+
+  const premiumDateUsed = Math.max(
+    0,
+    effectiveDailyDateCount - defaultDailyDateLimit
+  );
+
+  const defaultLikeUsed = Math.min(
+    effectiveDailyLikeCount,
+    defaultDailyLikeLimit
+  );
+
+  const premiumLikeUsed = Math.max(
+    0,
+    effectiveDailyLikeCount - defaultDailyLikeLimit
+  );
 
   return (
     <PageShell title="My Profile">
@@ -208,7 +270,8 @@ export default function HomePage() {
             <div className="text-sm app-muted mt-1">{subtitle}</div>
 
             <div className="text-sm app-muted mt-1">
-              {countryFlag(profile.nationality)} {profile.nationality} · {profile.city}
+              {countryFlag(profile.nationality)} {profile.nationality} ·{" "}
+              {profile.city}
             </div>
           </div>
 
@@ -237,13 +300,65 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          <div className="text-sm app-muted space-y-1">
+          {/* 🔧 V2 UI LIMITS */}
+          <div className="text-sm app-muted space-y-2">
+            <div className="font-semibold app-text">
+              Date requests today
+            </div>
+
             <div>
-              Date requests left today:{" "}
+              Default:{" "}
               <span className="app-text">
-                {Math.max(0, adminDailyDateLimit - (profile.dailyDateCount || 0))}
+                {defaultDateUsed} / {defaultDailyDateLimit}
               </span>
             </div>
+
+            {premiumActive ? (
+              <div>
+                Premium bonus:{" "}
+                <span className="app-text">
+                  {premiumDateUsed} /{" "}
+                  {Math.max(
+                    0,
+                    premiumDailyDateLimit -
+                      defaultDailyDateLimit
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-pink-600">
+                💖 Upgrade to send more date requests
+              </div>
+            )}
+
+            <div className="pt-2 font-semibold app-text">
+              Likes today
+            </div>
+
+            <div>
+              Default:{" "}
+              <span className="app-text">
+                {defaultLikeUsed} / {defaultDailyLikeLimit}
+              </span>
+            </div>
+
+            {premiumActive ? (
+              <div>
+                Premium bonus:{" "}
+                <span className="app-text">
+                  {premiumLikeUsed} /{" "}
+                  {Math.max(
+                    0,
+                    premiumDailyLikeLimit -
+                      defaultDailyLikeLimit
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-pink-600">
+                🔓 Unlock premium to get extra likes
+              </div>
+            )}
           </div>
 
           <Link
