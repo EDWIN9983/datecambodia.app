@@ -105,7 +105,20 @@ function DiscoverInner({
     (async () => {
       const blockedIds = await getBlockedUserIds(me.uid);
 
-      const u = (await listDiscoverUsers({ currentUid: me.uid })).filter(
+      const all = await listDiscoverUsers({ currentUid: me.uid });
+
+      // 🔥 CROSS-GENDER FILTER FIX
+      const filteredByGender = all.filter((x) => {
+        if (!me.gender || me.gender === "other") return true;
+        if (!x.gender) return true;
+
+        if (me.gender === "male") return x.gender === "female";
+        if (me.gender === "female") return x.gender === "male";
+
+        return true;
+      });
+
+      const u = filteredByGender.filter(
         (x) => !blockedIds.includes(x.uid)
       );
 
@@ -119,7 +132,7 @@ function DiscoverInner({
       setIdx(0);
       setHistory([]);
     })();
-  }, [me.uid]);
+  }, [me.uid, me.gender]);
 
   const current = users[idx];
   const age = useMemo(() => calcAge(current?.dob), [current?.dob]);
