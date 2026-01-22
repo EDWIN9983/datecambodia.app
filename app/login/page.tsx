@@ -42,6 +42,8 @@ export default function LoginPage() {
   );
 
   useEffect(() => {
+    const container = document.getElementById("recaptcha-container");
+
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
@@ -49,6 +51,17 @@ export default function LoginPage() {
         { size: "invisible" }
       );
     }
+
+    return () => {
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
+      if (container) {
+        container.innerHTML = "";
+      }
+    };
   }, []);
 
   async function sendCode() {
@@ -71,6 +84,12 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await confirm.confirm(code);
+
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
       router.replace("/auth-redirect");
     } catch (e: any) {
       setError(e?.message || "Invalid verification code");
@@ -84,6 +103,12 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
+
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
       router.replace("/auth-redirect");
     } catch (e: any) {
       setError(e?.message || "Google sign-in failed");
@@ -91,14 +116,12 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  // ⛔ Facebook wiring intentionally disabled (business verification pending)
   async function signInWithFacebook() {
     return;
   }
 
   return (
     <main className="w-full min-h-screen bg-white">
-      {/* SEO HERO */}
       <section
         className="relative min-h-screen w-full flex items-center justify-center overflow-hidden"
         style={{
@@ -130,13 +153,14 @@ export default function LoginPage() {
           </h1>
 
           <p className="mt-4 text-base md:text-lg text-white/95">
-            Meet real Khmer singles on the most trusted Cambodian dating website.  
+            Meet real Khmer singles on the most trusted Cambodian dating website.
             Chat, match, and date genuine people near you.
           </p>
 
           <p className="mt-3 text-sm md:text-base text-white/90">
-            DateCambodia.app is the No.1 Khmer dating platform for dating in Cambodia.  
-            Find love, fun, and real relationships with Cambodian women and men today.
+            DateCambodia.app is the No.1 Khmer dating platform for dating in
+            Cambodia. Find love, fun, and real relationships with Cambodian women
+            and men today.
           </p>
 
           <a
@@ -148,7 +172,6 @@ export default function LoginPage() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
       <section className="px-6 py-16 max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold text-center text-gray-900">
           How DateCambodia Works
@@ -156,11 +179,10 @@ export default function LoginPage() {
 
         <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="rounded-2xl border p-6 shadow-sm">
-            <h3 className="font-semibold text-lg text-gray-900">
-              Sign Up Free
-            </h3>
+            <h3 className="font-semibold text-lg text-gray-900">Sign Up Free</h3>
             <p className="mt-2 text-gray-700 text-sm">
-              Join the No.1 Cambodian dating app using your phone number or Google.
+              Join the No.1 Cambodian dating app using your phone number or
+              Google.
             </p>
           </div>
 
@@ -184,7 +206,6 @@ export default function LoginPage() {
         </div>
       </section>
 
-      {/* AUTH SECTION */}
       <section id="auth" className="px-6 pb-20">
         <div className="mx-auto max-w-md">
           <div className="rounded-3xl border bg-white p-6 shadow-lg">
@@ -237,7 +258,6 @@ export default function LoginPage() {
                   Continue with Google
                 </button>
 
-                {/* FACEBOOK — DISABLED SAFELY */}
                 <button
                   type="button"
                   disabled
