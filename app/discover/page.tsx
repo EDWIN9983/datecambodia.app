@@ -264,10 +264,50 @@ function DiscoverInner({
           </div>
 
           {showDate && (
-            <div className="mt-4 space-y-3">
-              {/* unchanged */}
-            </div>
-          )}
+  <div className="mt-4 space-y-3">
+    <input
+      type="date"
+      value={date}
+      onChange={(e) => setDate(e.target.value)}
+      className="w-full app-input"
+      min={todayISO()}
+    />
+
+    <input
+      type="time"
+      value={time}
+      onChange={(e) => setTime(e.target.value)}
+      className="w-full app-input"
+      min={nowTimeHHMMPlus(30)}
+    />
+
+    <input
+      ref={placeInputRef}
+      value={place}
+      onChange={(e) => setPlace(e.target.value)}
+      placeholder="Meeting place"
+      className="w-full app-input"
+    />
+
+    <div className="flex gap-2">
+      <button
+        disabled={busy}
+        onClick={confirmDate}
+        className="flex-1 rounded-xl app-primary-glow app-glow-pulse py-2 font-semibold"
+      >
+        Send Date
+      </button>
+
+      <button
+        onClick={() => setShowDate(false)}
+        className="flex-1 rounded-xl app-card py-2 font-semibold app-text"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
 
           {/* ✅ REPLACED ACTION BAR — UI ONLY */}
           <div className="mt-4 grid grid-cols-4 gap-3">
