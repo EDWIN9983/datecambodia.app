@@ -9,8 +9,6 @@ import {
   GoogleAuthProvider,
   FacebookAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
@@ -43,33 +41,33 @@ export default function LoginPage() {
     []
   );
 
-  // Handle Google redirect result (Safari fix)
   useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          router.replace("/auth-redirect");
-        }
-      })
-      .catch(() => {});
-  }, [router]);
+    const container = document.getElementById("recaptcha-container");
+
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        "recaptcha-container",
+        { size: "invisible" }
+      );
+    }
+
+    return () => {
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
+      if (container) {
+        container.innerHTML = "";
+      }
+    };
+  }, []);
 
   async function sendCode() {
     setError(null);
     setLoading(true);
-
     try {
-      if (!window.recaptchaVerifier) {
-        const container = document.getElementById("recaptcha-container");
-        if (!container) {
-          throw new Error("reCAPTCHA container not ready");
-        }
-
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, container, {
-          size: "invisible",
-        });
-      }
-
       const verifier = window.recaptchaVerifier!;
       const confirmation = await signInWithPhoneNumber(auth, phone, verifier);
       setConfirm(confirmation);
@@ -77,7 +75,6 @@ export default function LoginPage() {
     } catch (e: any) {
       setError(e?.message || "Failed to send verification code");
     }
-
     setLoading(false);
   }
 
@@ -85,37 +82,38 @@ export default function LoginPage() {
     if (!confirm) return;
     setError(null);
     setLoading(true);
-
     try {
       await confirm.confirm(code);
+
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
       router.replace("/auth-redirect");
     } catch (e: any) {
       setError(e?.message || "Invalid verification code");
     }
-
     setLoading(false);
   }
 
   async function signInWithGoogle() {
     setError(null);
     setLoading(true);
-
     try {
       const provider = new GoogleAuthProvider();
-      const ua = navigator.userAgent.toLowerCase();
-      const isSafari = ua.includes("safari") && !ua.includes("chrome");
+      await signInWithPopup(auth, provider);
 
-      if (isSafari) {
-        await signInWithRedirect(auth, provider);
-        return;
-      } else {
-        await signInWithPopup(auth, provider);
-        router.replace("/auth-redirect");
-      }
+      try {
+        window.recaptchaVerifier?.clear();
+        delete window.recaptchaVerifier;
+      } catch {}
+
+      router.replace("/auth-redirect");
     } catch (e: any) {
       setError(e?.message || "Google sign-in failed");
-      setLoading(false);
     }
+    setLoading(false);
   }
 
   async function signInWithFacebook() {
@@ -174,6 +172,40 @@ export default function LoginPage() {
         </div>
       </section>
 
+      <section className="px-6 py-16 max-w-6xl mx-auto">
+        <h2 className="text-3xl font-bold text-center text-gray-900">
+          How DateCambodia Works
+        </h2>
+
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="rounded-2xl border p-6 shadow-sm">
+            <h3 className="font-semibold text-lg text-gray-900">Sign Up Free</h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Join the No.1 Cambodian dating app using your phone number or
+              Google.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border p-6 shadow-sm">
+            <h3 className="font-semibold text-lg text-gray-900">
+              Create Your Profile
+            </h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Add photos, interests, and details to attract real Khmer singles.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border p-6 shadow-sm">
+            <h3 className="font-semibold text-lg text-gray-900">
+              Start Dating
+            </h3>
+            <p className="mt-2 text-gray-700 text-sm">
+              Discover people nearby and connect instantly on DateCambodia.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="auth" className="px-6 pb-20">
         <div className="mx-auto max-w-md">
           <div className="rounded-3xl border bg-white p-6 shadow-lg">
@@ -181,7 +213,9 @@ export default function LoginPage() {
               <h2 className="text-2xl font-extrabold text-gray-900">
                 Join DateCambodia
               </h2>
-              <p className="text-sm text-gray-700 mt-1">Sign in to continue</p>
+              <p className="text-sm text-gray-700 mt-1">
+                Sign in to continue
+              </p>
             </div>
 
             {step === "phone" ? (
