@@ -92,6 +92,8 @@ function DiscoverInner({
   const [place, setPlace] = useState("");
   const [placeId, setPlaceId] = useState<string | null>(null);
 
+  const [toast, setToast] = useState<string | null>(null);
+
   const placeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<any>(null);
 
@@ -129,6 +131,12 @@ function DiscoverInner({
       setHistory([]);
     })();
   }, [me.uid, me.gender]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const current = users[idx];
   const age = useMemo(() => calcAge(current?.dob), [current?.dob]);
@@ -181,10 +189,6 @@ function DiscoverInner({
       const meNow = await getUserDoc(me.uid);
       if (meNow) setMe(meNow);
       await next();
-    } catch (e: any) {
-      if (e.message === "LIKE_LIMIT_REACHED") {
-        alert("Daily like limit reached.");
-      }
     } finally {
       setBusy(false);
     }
@@ -192,6 +196,7 @@ function DiscoverInner({
 
   async function confirmDate() {
     if (!current || !date || !time || !place || !placeId) return;
+
     const selected = new Date(`${date} ${time}`);
     if (selected.getTime() <= Date.now()) return;
 
@@ -219,9 +224,11 @@ function DiscoverInner({
       await next();
     } catch (e: any) {
       if (e.message === "DATE_LIMIT_REACHED") {
-        alert("Daily date request limit reached.");
+        setToast("Daily date request limit reached.");
+      } else if (e.message === "DUPLICATE") {
+        setToast("You already sent a date request to this user.");
       } else {
-        alert("You already sent a date request to this user.");
+        setToast("Failed to send date request.");
       }
     } finally {
       setBusy(false);
@@ -264,60 +271,61 @@ function DiscoverInner({
           </div>
 
           {showDate && (
-  <div className="mt-4 space-y-3">
-    <input
-      type="date"
-      value={date}
-      onChange={(e) => setDate(e.target.value)}
-      className="w-full app-input"
-      min={todayISO()}
-    />
+            <div className="mt-4 space-y-3">
+              <input
+                type="date"
+                className="w-full app-input"
+                min={todayISO()}
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
 
-    <input
-      type="time"
-      value={time}
-      onChange={(e) => setTime(e.target.value)}
-      className="w-full app-input"
-      min={nowTimeHHMMPlus(30)}
-    />
+              <input
+                type="time"
+                className="w-full app-input"
+                min={nowTimeHHMMPlus(15)}
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
 
-    <input
-      ref={placeInputRef}
-      value={place}
-      onChange={(e) => setPlace(e.target.value)}
-      placeholder="Meeting place"
-      className="w-full app-input"
-    />
+              <input
+                ref={placeInputRef}
+                type="text"
+                className="w-full app-input"
+                placeholder="Search place (Cambodia only)"
+                value={place}
+                onChange={(e) => {
+                  setPlace(e.target.value);
+                  setPlaceId(null);
+                }}
+              />
 
-    <div className="flex gap-2">
-      <button
-        disabled={busy}
-        onClick={confirmDate}
-        className="flex-1 rounded-xl app-primary-glow app-glow-pulse py-2 font-semibold"
-      >
-        Send Date
-      </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={confirmDate}
+                  disabled={busy || !date || !time || !place || !placeId}
+                  className="rounded-xl app-primary-glow app-glow-pulse px-4 py-2 font-semibold disabled:opacity-50"
+                >
+                  📅 Send Date
+                </button>
+                <button
+                  onClick={() => setShowDate(false)}
+                  className="rounded-xl app-card px-4 py-2 font-semibold app-text"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
-      <button
-        onClick={() => setShowDate(false)}
-        className="flex-1 rounded-xl app-card py-2 font-semibold app-text"
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-)}
-
-
-          {/* ✅ REPLACED ACTION BAR — UI ONLY */}
           <div className="mt-4 grid grid-cols-4 gap-3">
             <button
               disabled={!premiumActive || busy}
               onClick={goBack}
               className="rounded-xl app-card px-4 py-3 font-semibold app-text disabled:opacity-40"
             >
-              ➤
-              <div className="mt-1 text-[11px] app-muted">Skip</div>
+              ⏮
+              <div className="mt-1 text-[11px] app-muted">Back</div>
             </button>
 
             <button
@@ -325,27 +333,34 @@ function DiscoverInner({
               onClick={next}
               className="rounded-xl app-card px-4 py-3 font-semibold app-text"
             >
-              ✖
+              ❌
               <div className="mt-1 text-[11px] app-muted">Pass</div>
             </button>
 
-        <button
-         disabled={busy}
-         onClick={like}
-         className="rounded-xl app-primary-glow app-glow-pulse px-4 py-3 font-semibold"
-        >
-         ❤️
-         <div className="mt-1 text-[11px] text-white/90">Like</div>
-        </button>
+            <button
+              disabled={busy}
+              onClick={like}
+              className="rounded-xl app-primary-glow app-glow-pulse px-4 py-3 font-semibold"
+            >
+              💗
+              <div className="mt-1 text-[11px] text-white/90">Like</div>
+            </button>
+
             <button
               disabled={busy}
               onClick={() => setShowDate(true)}
               className="rounded-xl app-card px-4 py-3 font-semibold app-text"
             >
-              📅❤️
+              📅
               <div className="mt-1 text-[11px] app-muted">Date</div>
             </button>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 app-card rounded-full px-4 py-2 text-sm app-text shadow">
+          {toast}
         </div>
       )}
     </>
