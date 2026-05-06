@@ -146,8 +146,8 @@ export default function PageShell({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-16">
-      <header className="bg-white border-b px-4 py-3 sticky top-0 z-30">
+    <div className="min-h-screen bg-black pb-16">
+      <header className="app-card border-b px-4 py-3 sticky top-0 z-30">
         <div className="flex items-center justify-between">
           <Link href="/home" className="flex items-center">
             <img
@@ -248,35 +248,35 @@ export default function PageShell({
       )}
 
       {open && (
-        <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow text-gray-900">
-          <nav className="flex flex-col divide-y divide-gray-200 text-sm">
+        <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border app-card shadow app-text">
+          <nav className="flex flex-col divide-y divide-white/10 text-sm">
             <Link
               href="/store"
-              className="px-4 py-3 hover:bg-gray-100 font-medium"
+              className="px-4 py-3 hover:bg-white/5 font-medium"
             >
               Store
             </Link>
             <Link
               href="/settings"
-              className="px-4 py-3 hover:bg-gray-100 font-medium"
+              className="px-4 py-3 hover:bg-white/5 font-medium"
             >
               Settings
             </Link>
             <Link
               href="https://datecambodia.app/contact"
-              className="px-4 py-3 hover:bg-gray-100 font-medium"
+              className="px-4 py-3 hover:bg-white/5 font-medium"
             >
               Contact
             </Link>
             <Link
               href="https://datecambodia.app/community"
-              className="px-4 py-3 hover:bg-gray-100 font-medium"
+              className="px-4 py-3 hover:bg-white/5 font-medium"
             >
               Community
             </Link>
             <button
               onClick={logout}
-              className="px-4 py-3 text-left text-red-600 hover:bg-red-50 font-semibold"
+              className="px-4 py-3 text-left text-red-400 hover:bg-red-500/10 font-semibold"
             >
               Logout
             </button>

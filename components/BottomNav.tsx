@@ -72,8 +72,10 @@ export default function BottomNav() {
         chatsQ,
         (snap) => {
           let unread = false;
+
           for (const d of snap.docs) {
             const data = d.data() as any;
+
             if (
               data?.lastMessage?.senderId &&
               data.lastMessage.senderId !== uid
@@ -82,6 +84,7 @@ export default function BottomNav() {
               break;
             }
           }
+
           setHasMessageNotif(unread);
         },
         () => setHasMessageNotif(false)
@@ -98,10 +101,11 @@ export default function BottomNav() {
   }, []);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t bg-white z-50">
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-black/95 backdrop-blur z-50">
       <div className="mx-auto flex max-w-md justify-between px-4 py-2">
         {tabs.map((tab) => {
           const active = path.startsWith(tab.href);
+
           const showDot =
             (tab.href === "/dates" && hasDateNotif) ||
             (tab.href === "/messages" && hasMessageNotif) ||
@@ -111,7 +115,7 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className="flex flex-col items-center justify-center gap-1 py-1 px-2 rounded-md hover:bg-gray-50 transition"
+              className="flex flex-col items-center justify-center gap-1 py-1 px-2 rounded-md hover:bg-white/5 transition"
               aria-current={active ? "page" : undefined}
             >
               <span className="relative">
@@ -132,7 +136,7 @@ export default function BottomNav() {
 
               <span
                 className={`text-xs font-medium ${
-                  active ? "text-pink-600" : "text-gray-400"
+                  active ? "text-pink-500" : "text-white/50"
                 }`}
               >
                 {tab.label}
