@@ -62,6 +62,7 @@ export default function DiscoverPage() {
       if (!snap.exists()) return router.replace("/profile-setup");
       setMe({ ...(snap.data() as UserDoc), uid: user.uid });
     });
+
     return () => unsub();
   }, [router]);
 
@@ -163,15 +164,17 @@ function DiscoverInner({
         setPlace(p.name || "");
         setPlaceId(p.place_id);
       });
-    } catch (err) {
+    } catch {
       console.warn("Google Places unavailable, fallback to manual input.");
     }
   }, [showDate]);
 
   async function next() {
     if (!current) return;
+
     setHistory((h) => [...h, current]);
     setIdx((i) => i + 1);
+
     try {
       await markViewed(me.uid, current.uid);
     } catch {}
@@ -179,8 +182,10 @@ function DiscoverInner({
 
   function goBack() {
     if (!premiumActive) return;
+
     const prev = history[history.length - 1];
     if (!prev) return;
+
     setHistory((h) => h.slice(0, -1));
     setUsers((u) => [prev, ...u.slice(idx)]);
     setIdx(0);
@@ -216,6 +221,7 @@ function DiscoverInner({
     if (selected.getTime() <= Date.now()) return;
 
     setBusy(true);
+
     try {
       const meNow = await getUserDoc(me.uid);
       if (!meNow) return;
@@ -226,7 +232,7 @@ function DiscoverInner({
         date,
         time,
         place,
-        placeId: placeId || null,
+        placeId: placeId || "",
       });
 
       setShowDate(false);
@@ -275,7 +281,9 @@ function DiscoverInner({
               {formatDistanceKm(current.uid)}
             </div>
 
-            <div className="mt-3 text-sm app-text">{current.bio}</div>
+            <div className="mt-3 text-sm app-text">
+              {current.bio}
+            </div>
 
             <Link
               href={`/u/${current.uid}`}
@@ -323,6 +331,7 @@ function DiscoverInner({
                 >
                   📅 Send Date
                 </button>
+
                 <button
                   onClick={() => setShowDate(false)}
                   className="rounded-xl app-card px-4 py-2 font-semibold app-text"
