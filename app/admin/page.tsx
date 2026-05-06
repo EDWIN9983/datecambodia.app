@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import DefaultsPanel from "@/app/admin/components/DefaultsPanel";
 import { useEffect, useState } from "react";
 
@@ -321,6 +322,18 @@ export default function AdminPage() {
         </Section>
 
         <DefaultsPanel />
+                <Section title="Admin Tools">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Link href="/admin/store-settings" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Store Settings</Link>
+            <Link href="/admin/promotions" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Promotions</Link>
+            <Link href="/admin/reports" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">User Reports</Link>
+            <Link href="/admin/analytics" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Analytics</Link>
+            <Link href="/admin/notifications" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Notifications</Link>
+            <Link href="/admin/events" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Events Manager</Link>
+            <Link href="/admin/blog" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">Blog Manager</Link>
+            <Link href="/admin/settings" className="rounded-xl border app-card p-4 text-sm font-semibold app-text hover:opacity-80 transition">App Settings</Link>
+          </div>
+        </Section>
 
         <Section title="User Filters (Read-only)">
           <div className="flex gap-2 mb-2">

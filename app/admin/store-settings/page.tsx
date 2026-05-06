@@ -107,13 +107,20 @@ export default function StorePage() {
     storeConfig.discountEndsAt &&
     storeConfig.discountEndsAt.toDate().getTime() > Date.now();
 
+  function redirectToTelegram(message: string) {
+    const url = `https://t.me/datecambodia?text=${encodeURIComponent(
+      message
+    )}`;
+
+    window.open(url, "_blank");
+  }
+
   if (loading || !me) return null;
 
   return (
     <PageShell title="Store">
       <div className="space-y-6">
 
-        {/* HERO */}
         <div className="rounded-3xl app-card p-6 text-center">
           <div className="text-xl font-semibold app-text">
             💖 Unlock Your Dating Power
@@ -178,7 +185,6 @@ export default function StorePage() {
           </div>
         </div>
 
-        {/* PREMIUM BUY */}
         <div className="rounded-3xl app-card p-6">
           <div className="flex items-center gap-2">
             <div className="text-lg font-semibold app-text">
@@ -231,6 +237,11 @@ export default function StorePage() {
               return (
                 <button
                   key={days}
+                  onClick={() =>
+                    redirectToTelegram(
+                      `Hi, I want to buy ${days} Days Premium for $${finalPrice}`
+                    )
+                  }
                   className="rounded-2xl app-primary glow-btn px-4 py-3 text-sm font-semibold shadow-lg hover:scale-[1.02] transition"
                 >
                   <div>Buy {days} Days</div>
@@ -253,7 +264,6 @@ export default function StorePage() {
           </div>
         </div>
 
-        {/* PULSES BUY */}
         <div className="rounded-3xl app-card p-6">
           <div className="flex items-center gap-2">
             <div className="text-lg font-semibold app-text">
@@ -266,21 +276,19 @@ export default function StorePage() {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
-              +10 Pulses
-            </button>
-
-            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
-              +50 Pulses
-            </button>
-
-            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
-              +100 Pulses
-            </button>
-
-            <button className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition">
-              +500 Pulses
-            </button>
+            {[10, 50, 100, 500].map((amount) => (
+              <button
+                key={amount}
+                onClick={() =>
+                  redirectToTelegram(
+                    `Hi, I want to buy ${amount} Pulses`
+                  )
+                }
+                className="rounded-2xl app-card px-4 py-3 text-sm font-semibold app-text shadow hover:scale-[1.02] transition"
+              >
+                +{amount} Pulses
+              </button>
+            ))}
           </div>
         </div>
 
