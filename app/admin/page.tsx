@@ -1,4 +1,5 @@
 "use client";
+
 import DefaultsPanel from "@/app/admin/components/DefaultsPanel";
 import { useEffect, useState } from "react";
 
@@ -54,7 +55,9 @@ export default function AdminPage() {
   const [listLoading, setListLoading] = useState(false);
 
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
+  const [selectedUids, setSelectedUids] = useState<string[]>([]);
   const [editData, setEditData] = useState<Partial<UserDoc>>({});
+  const [viewMoreOpen, setViewMoreOpen] = useState(false);
 
   const [premiumDays, setPremiumDays] = useState(7);
   const [coinsAmount, setCoinsAmount] = useState(0);
@@ -108,10 +111,12 @@ export default function AdminPage() {
     if (!hasFilter) {
       setList([]);
       setUserDoc(null);
+      setSelectedUids([]);
       return;
     }
 
     setListLoading(true);
+
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
@@ -123,84 +128,143 @@ export default function AdminPage() {
           adminPassword: password,
         }),
       });
+
       const data = await res.json();
+
       setList(data.users || []);
       setUserDoc(null);
+      setSelectedUids([]);
     } catch {
       setList([]);
       setUserDoc(null);
+      setSelectedUids([]);
     }
+
     setListLoading(false);
   }
 
   async function applyPremium() {
-    if (!userDoc?.uid) return;
+    const targets =
+      selectedUids.length > 0
+        ? selectedUids
+        : userDoc?.uid
+        ? [userDoc.uid]
+        : [];
+
+    if (!targets.length) return;
+
     const until = new Date();
     until.setDate(until.getDate() + premiumDays);
 
-    await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "premium",
-        uid: userDoc.uid,
-        until,
-        adminPassword: password,
-      }),
-    });
+    await Promise.all(
+      targets.map((uid) =>
+        fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "premium",
+            uid,
+            until,
+            adminPassword: password,
+          }),
+        })
+      )
+    );
 
-    setUserDoc({ ...userDoc, coinBUntil: until });
+    if (userDoc?.uid && targets.includes(userDoc.uid)) {
+      setUserDoc({ ...userDoc, coinBUntil: until });
+    }
   }
 
   async function applyCoins() {
-    if (!userDoc?.uid) return;
+    const targets =
+      selectedUids.length > 0
+        ? selectedUids
+        : userDoc?.uid
+        ? [userDoc.uid]
+        : [];
 
-    await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "coins",
-        uid: userDoc.uid,
-        coins: coinsAmount,
-        adminPassword: password,
-      }),
-    });
+    if (!targets.length) return;
 
-    setUserDoc({ ...userDoc, coinsA: coinsAmount });
+    await Promise.all(
+      targets.map((uid) =>
+        fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "coins",
+            uid,
+            coins: coinsAmount,
+            adminPassword: password,
+          }),
+        })
+      )
+    );
+
+    if (userDoc?.uid && targets.includes(userDoc.uid)) {
+      setUserDoc({ ...userDoc, coinsA: coinsAmount });
+    }
   }
 
   async function handleBanToggle(ban: boolean) {
-    if (!userDoc?.uid) return;
+    const targets =
+      selectedUids.length > 0
+        ? selectedUids
+        : userDoc?.uid
+        ? [userDoc.uid]
+        : [];
 
-    await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "ban",
-        uid: userDoc.uid,
-        ban,
-        adminPassword: password,
-      }),
-    });
+    if (!targets.length) return;
 
-    setUserDoc({ ...userDoc, isBanned: ban });
+    await Promise.all(
+      targets.map((uid) =>
+        fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "ban",
+            uid,
+            ban,
+            adminPassword: password,
+          }),
+        })
+      )
+    );
+
+    if (userDoc?.uid && targets.includes(userDoc.uid)) {
+      setUserDoc({ ...userDoc, isBanned: ban });
+    }
   }
 
   async function applyEdit() {
-    if (!userDoc?.uid || !editData) return;
+    const targets =
+      selectedUids.length > 0
+        ? selectedUids
+        : userDoc?.uid
+        ? [userDoc.uid]
+        : [];
 
-    await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "update",
-        uid: userDoc.uid,
-        updates: editData,
-        adminPassword: password,
-      }),
-    });
+    if (!targets.length || !editData) return;
 
-    setUserDoc({ ...userDoc, ...editData });
+    await Promise.all(
+      targets.map((uid) =>
+        fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            uid,
+            updates: editData,
+            adminPassword: password,
+          }),
+        })
+      )
+    );
+
+    if (userDoc?.uid && targets.includes(userDoc.uid)) {
+      setUserDoc({ ...userDoc, ...editData });
+    }
+
     setEditData({});
   }
 
@@ -210,24 +274,26 @@ export default function AdminPage() {
     api("stats").then((data) => {
       if (data && typeof data.totalUsers === "number") {
         setStats(data);
-      } else {
-        console.error("Invalid stats payload:", data);
       }
     });
   }, [authorized]);
 
   if (!authorized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="w-full max-w-sm rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-lg font-semibold">Admin Access</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-full max-w-sm rounded-2xl border app-card p-6 shadow-sm">
+          <div className="text-lg font-semibold app-text">Admin Access</div>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-4 w-full rounded-xl border px-3 py-2 text-sm"
+            className="mt-4 w-full rounded-xl border app-input px-3 py-2 text-sm"
           />
-          {error && <div className="mt-2 text-xs text-red-600">Incorrect password</div>}
+          {error && (
+            <div className="mt-2 text-xs text-red-600">
+              Incorrect password
+            </div>
+          )}
           <button
             onClick={login}
             className="mt-4 w-full rounded-xl border px-4 py-2 text-sm font-semibold"
@@ -240,7 +306,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-6">
 
         <Section title="System Status">
@@ -263,8 +329,9 @@ export default function AdminPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search UID / Name / Public ID"
-              className="flex-1 rounded-xl border px-3 py-2 text-sm"
+              className="flex-1 rounded-xl border app-input px-3 py-2 text-sm"
             />
+
             <button
               onClick={() => {
                 setSearchQuery("");
@@ -279,6 +346,7 @@ export default function AdminPage() {
                 });
                 setList([]);
                 setUserDoc(null);
+                setSelectedUids([]);
               }}
               className="rounded-xl border px-4 py-2 text-sm font-semibold"
             >
@@ -294,7 +362,7 @@ export default function AdminPage() {
                   premium: e.target.value === "" ? null : e.target.value === "true",
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">Premium</option>
               <option value="true">Yes</option>
@@ -311,7 +379,7 @@ export default function AdminPage() {
                       : null,
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">Gender</option>
               <option value="male">Male</option>
@@ -325,7 +393,7 @@ export default function AdminPage() {
                   hasPhone: e.target.value === "" ? null : e.target.value === "true",
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">Phone</option>
               <option value="true">Has</option>
@@ -339,7 +407,7 @@ export default function AdminPage() {
                   banned: e.target.value === "" ? null : e.target.value === "true",
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">Status</option>
               <option value="false">Active</option>
@@ -356,7 +424,7 @@ export default function AdminPage() {
                       : null,
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">Joined</option>
               <option value="today">Today</option>
@@ -370,7 +438,7 @@ export default function AdminPage() {
                   city: e.target.value || "",
                 }))
               }
-              className="rounded-xl border p-2 text-sm"
+              className="rounded-xl border app-input p-2 text-sm"
             >
               <option value="">City</option>
               {CITIES.map((c) => (
@@ -388,23 +456,74 @@ export default function AdminPage() {
         </Section>
 
         <Section title="Users List">
-          {listLoading && <div className="text-sm text-gray-500">Loading…</div>}
-          <div className="divide-y">
-            {list.map((u) => (
+          {listLoading && <div className="text-sm app-muted">Loading…</div>}
+
+          {list.length > 0 && (
+            <div className="mb-3 flex items-center gap-3">
               <button
-                key={u.uid}
-                onClick={() => setUserDoc(u)}
-                className="w-full text-left p-3 hover:bg-gray-50"
+                onClick={() => {
+                  if (selectedUids.length === list.length) {
+                    setSelectedUids([]);
+                  } else {
+                    setSelectedUids(list.map((u) => u.uid));
+                  }
+                }}
+                className="rounded-xl border px-3 py-1 text-xs font-semibold"
               >
-                <div className="font-semibold">
-                  {u.name || "—"}{" "}
-                  <span className="text-xs text-gray-500">{u.publicId || ""}</span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  {u.gender || "—"} · {u.phone ? "Has phone" : "No phone"} · {u.city || "—"}
-                </div>
+                {selectedUids.length === list.length
+                  ? "Unselect All"
+                  : "Select All"}
               </button>
-            ))}
+
+              <div className="text-xs app-muted">
+                Selected: {selectedUids.length}
+              </div>
+            </div>
+          )}
+
+          <div className="divide-y">
+            {list.map((u) => {
+              const selected = selectedUids.includes(u.uid);
+              const active = userDoc?.uid === u.uid;
+
+              return (
+                <button
+                  key={u.uid}
+                  onClick={() => {
+                    setUserDoc(u);
+
+                    setSelectedUids((prev) =>
+                      prev.includes(u.uid)
+                        ? prev.filter((id) => id !== u.uid)
+                        : [...prev, u.uid]
+                    );
+                  }}
+                  className={`w-full text-left p-3 flex justify-between items-center transition
+                    ${active ? "border border-white rounded-xl" : ""}
+                    ${selected ? "bg-white/10" : "hover:bg-white/5"}
+                  `}
+                >
+                  <div>
+                    <div className="font-semibold app-text">
+                      {u.name || "—"}{" "}
+                      <span className="text-xs app-muted">
+                        {u.publicId || ""}
+                      </span>
+                    </div>
+
+                    <div className="text-xs app-muted">
+                      {u.gender || "—"} · {u.phone ? "Has phone" : "No phone"} · {u.city || "—"}
+                    </div>
+                  </div>
+
+                  {selected && (
+                    <div className="text-green-400 text-lg font-bold">
+                      ✓
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </Section>
 
@@ -418,17 +537,26 @@ export default function AdminPage() {
                 >
                   Ban
                 </button>
+
                 <button
                   onClick={() => requireConfirm(() => handleBanToggle(false))}
                   className="rounded-xl border px-4 py-2 text-sm font-semibold"
                 >
                   Unban
                 </button>
+
                 <button
                   onClick={() => requireConfirm(applyEdit)}
                   className="rounded-xl border px-4 py-2 text-sm font-semibold"
                 >
                   Apply Edit
+                </button>
+
+                <button
+                  onClick={() => setViewMoreOpen(true)}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold"
+                >
+                  View More
                 </button>
               </div>
 
@@ -437,7 +565,7 @@ export default function AdminPage() {
                   type="number"
                   value={premiumDays}
                   onChange={(e) => setPremiumDays(Number(e.target.value))}
-                  className="w-24 rounded-xl border px-2 py-1 text-sm"
+                  className="w-24 rounded-xl border app-input px-2 py-1 text-sm"
                 />
                 <button
                   onClick={() => requireConfirm(applyPremium)}
@@ -452,7 +580,7 @@ export default function AdminPage() {
                   type="number"
                   value={coinsAmount}
                   onChange={(e) => setCoinsAmount(Number(e.target.value))}
-                  className="w-24 rounded-xl border px-2 py-1 text-sm"
+                  className="w-24 rounded-xl border app-input px-2 py-1 text-sm"
                 />
                 <button
                   onClick={() => requireConfirm(applyCoins)}
@@ -467,20 +595,46 @@ export default function AdminPage() {
                   type="text"
                   value={editData.name || ""}
                   onChange={(e) =>
-                    setEditData((d) => ({ ...d, name: e.target.value }))
+                    setEditData((d) => ({
+                      ...d,
+                      name: e.target.value,
+                    }))
                   }
                   placeholder="Edit Name"
-                  className="rounded-xl border px-2 py-1 text-sm"
+                  className="rounded-xl border app-input px-2 py-1 text-sm"
                 />
               </div>
             </div>
           </Section>
         )}
 
+        {viewMoreOpen && userDoc && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="app-card rounded-2xl p-6 w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-lg font-semibold app-text">
+                  Full User Data
+                </div>
+
+                <button
+                  onClick={() => setViewMoreOpen(false)}
+                  className="rounded-xl border px-3 py-1 text-sm"
+                >
+                  Close
+                </button>
+              </div>
+
+              <pre className="text-xs whitespace-pre-wrap break-all app-muted bg-black/20 rounded-xl p-4 overflow-auto">
+                {JSON.stringify(userDoc, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+
         {confirmOpen && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-              <div className="text-sm font-semibold text-gray-900">
+            <div className="app-card rounded-2xl p-6 w-full max-w-sm">
+              <div className="text-sm font-semibold app-text">
                 Confirm Admin Password
               </div>
 
@@ -488,7 +642,7 @@ export default function AdminPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-4 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-4 w-full rounded-xl border app-input px-3 py-2 text-sm"
                 placeholder="Re-enter admin password"
               />
 
@@ -499,6 +653,7 @@ export default function AdminPage() {
                 >
                   Cancel
                 </button>
+
                 <button
                   onClick={() => {
                     pendingAction?.();
@@ -512,25 +667,42 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-2xl border p-5 bg-white shadow-sm mt-5">
-      <div className="text-sm font-semibold mb-3">{title}</div>
+    <section className="rounded-2xl border app-card p-5 shadow-sm mt-5">
+      <div className="text-sm font-semibold mb-3 app-text">
+        {title}
+      </div>
       {children}
     </section>
   );
 }
 
-function Stat({ label, value }: { label: string; value?: number }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string;
+  value?: number;
+}) {
   return (
-    <div className="rounded-xl border bg-white p-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold">{value ?? "—"}</div>
+    <div className="rounded-xl border app-card p-3">
+      <div className="text-xs app-muted">{label}</div>
+      <div className="mt-1 text-lg font-semibold app-text">
+        {value ?? "—"}
+      </div>
     </div>
   );
 }

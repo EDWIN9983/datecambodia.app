@@ -1,14 +1,11 @@
-// FILE 2 — REPLACE FULLY
-// app/admin/components/DefaultsPanel.tsx
-
 "use client";
 
 import { useEffect, useState } from "react";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border p-5 bg-white shadow-sm">
-      <div className="text-sm font-semibold">{title}</div>
+    <section className="rounded-2xl border app-card p-5 shadow-sm">
+      <div className="text-sm font-semibold app-text">{title}</div>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -88,7 +85,7 @@ export default function DefaultsPanel() {
   if (loading) {
     return (
       <Section title="New User Defaults & Limits">
-        <div className="text-sm text-gray-500">Loading…</div>
+        <div className="text-sm app-muted">Loading…</div>
       </Section>
     );
   }
@@ -97,42 +94,86 @@ export default function DefaultsPanel() {
     <Section title="New User Defaults & Limits">
       <div className="grid grid-cols-4 gap-2">
         <div>
-          <label className="text-xs text-gray-500">Signup Coins A</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={defaultCoinsA} onChange={(e) => setDefaultCoinsA(Number(e.target.value))} />
+          <label className="text-xs app-muted">Signup Coins A</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={defaultCoinsA}
+            onChange={(e) => setDefaultCoinsA(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Signup Premium Days</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={defaultPremiumDays} onChange={(e) => setDefaultPremiumDays(Number(e.target.value))} />
+          <label className="text-xs app-muted">Signup Premium Days</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={defaultPremiumDays}
+            onChange={(e) => setDefaultPremiumDays(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Signup Likes</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={defaultDailyLikeCount} onChange={(e) => setDefaultDailyLikeCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Signup Likes</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={defaultDailyLikeCount}
+            onChange={(e) => setDefaultDailyLikeCount(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Signup Dates</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={defaultDailyDateCount} onChange={(e) => setDefaultDailyDateCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Signup Dates</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={defaultDailyDateCount}
+            onChange={(e) => setDefaultDailyDateCount(Number(e.target.value))}
+          />
         </div>
 
         <div>
-          <label className="text-xs text-gray-500">Daily Likes (All)</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={dailyLikeCount} onChange={(e) => setDailyLikeCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Daily Likes (All)</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={dailyLikeCount}
+            onChange={(e) => setDailyLikeCount(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Daily Dates (All)</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={dailyDateCount} onChange={(e) => setDailyDateCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Daily Dates (All)</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={dailyDateCount}
+            onChange={(e) => setDailyDateCount(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Daily Likes (Premium)</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={premiumDailyLikeCount} onChange={(e) => setPremiumDailyLikeCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Daily Likes (Premium)</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={premiumDailyLikeCount}
+            onChange={(e) => setPremiumDailyLikeCount(Number(e.target.value))}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Daily Dates (Premium)</label>
-          <input className="rounded-xl border p-2 text-sm w-full" type="number" value={premiumDailyDateCount} onChange={(e) => setPremiumDailyDateCount(Number(e.target.value))} />
+          <label className="text-xs app-muted">Daily Dates (Premium)</label>
+          <input
+            className="rounded-xl border app-input p-2 text-sm w-full"
+            type="number"
+            value={premiumDailyDateCount}
+            onChange={(e) => setPremiumDailyDateCount(Number(e.target.value))}
+          />
         </div>
       </div>
 
       <div className="flex justify-end mt-3">
-        <button onClick={saveDefaults} disabled={saving} className="rounded-xl border px-4 py-2 text-sm font-semibold">
+        <button
+          onClick={saveDefaults}
+          disabled={saving}
+          className="rounded-xl border px-4 py-2 text-sm font-semibold"
+        >
           Save
         </button>
       </div>

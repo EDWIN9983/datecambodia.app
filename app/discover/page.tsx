@@ -144,23 +144,28 @@ function DiscoverInner({
   useEffect(() => {
     if (!showDate) return;
     if (!placeInputRef.current) return;
-    if (!(window as any).google?.maps?.places) return;
 
-    autocompleteRef.current =
-      new (window as any).google.maps.places.Autocomplete(
-        placeInputRef.current,
-        {
-          componentRestrictions: { country: "kh" },
-          fields: ["place_id", "name", "formatted_address"],
-        }
-      );
+    try {
+      if (!(window as any).google?.maps?.places?.Autocomplete) return;
 
-    autocompleteRef.current.addListener("place_changed", () => {
-      const p = autocompleteRef.current.getPlace();
-      if (!p?.place_id) return;
-      setPlace(p.name || "");
-      setPlaceId(p.place_id);
-    });
+      autocompleteRef.current =
+        new (window as any).google.maps.places.Autocomplete(
+          placeInputRef.current,
+          {
+            componentRestrictions: { country: "kh" },
+            fields: ["place_id", "name", "formatted_address"],
+          }
+        );
+
+      autocompleteRef.current.addListener("place_changed", () => {
+        const p = autocompleteRef.current.getPlace();
+        if (!p?.place_id) return;
+        setPlace(p.name || "");
+        setPlaceId(p.place_id);
+      });
+    } catch (err) {
+      console.warn("Google Places unavailable, fallback to manual input.");
+    }
   }, [showDate]);
 
   async function next() {
@@ -183,19 +188,29 @@ function DiscoverInner({
 
   async function like() {
     if (!current) return;
+
     setBusy(true);
+
     try {
       await likeUser(me.uid, current.uid);
+
       const meNow = await getUserDoc(me.uid);
       if (meNow) setMe(meNow);
+
       await next();
+    } catch (e: any) {
+      if (e.message === "LIKE_LIMIT_REACHED") {
+        setToast("Upgrade to Premium to increase your daily like limit 💎");
+      } else {
+        setToast("Failed to send like.");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function confirmDate() {
-    if (!current || !date || !time || !place || !placeId) return;
+    if (!current || !date || !time || !place) return;
 
     const selected = new Date(`${date} ${time}`);
     if (selected.getTime() <= Date.now()) return;
@@ -211,7 +226,7 @@ function DiscoverInner({
         date,
         time,
         place,
-        placeId,
+        placeId: placeId || null,
       });
 
       setShowDate(false);
@@ -224,7 +239,7 @@ function DiscoverInner({
       await next();
     } catch (e: any) {
       if (e.message === "DATE_LIMIT_REACHED") {
-        setToast("Daily date request limit reached.");
+        setToast("Upgrade to Premium to send more date requests 💎");
       } else if (e.message === "DUPLICATE") {
         setToast("You already sent a date request to this user.");
       } else {
@@ -303,7 +318,7 @@ function DiscoverInner({
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={confirmDate}
-                  disabled={busy || !date || !time || !place || !placeId}
+                  disabled={busy || !date || !time || !place}
                   className="rounded-xl app-primary-glow app-glow-pulse px-4 py-2 font-semibold disabled:opacity-50"
                 >
                   📅 Send Date

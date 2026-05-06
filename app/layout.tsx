@@ -21,11 +21,7 @@ export default function RootLayout({
       <body className="bg-gray-100 text-black">
         {children}
 
-        <script
-          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyChPGTqjXPTbi6B5ZJRgK87FKfrTBPrzgw&libraries=places"
-          async
-          defer
-        ></script>
+        
 
         <script
           dangerouslySetInnerHTML={{
