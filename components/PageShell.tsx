@@ -13,6 +13,8 @@ import {
   limit,
   onSnapshot,
   getDocs,
+  getDoc,
+  doc,
 } from "firebase/firestore";
 import { usePathname, useRouter } from "next/navigation";
 import { Sparkles, HeartPulse, AlignJustify } from "lucide-react";
@@ -43,6 +45,7 @@ export default function PageShell({
   const [search, setSearch] = useState("");
   const [notifications, setNotifications] = useState<NotificationDoc[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -57,17 +60,32 @@ export default function PageShell({
     window.location.href = "/login";
   }
 
-  /* -----------------------------
-     AUTH + LIVE NOTIFICATIONS
-  ------------------------------*/
   useEffect(() => {
     let unsubNotif: (() => void) | null = null;
 
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       setNotifications([]);
+      setIsPremium(false);
 
       if (!u) return;
+
+      try {
+        const userSnap = await getDoc(doc(db, "users", u.uid));
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+
+          if (
+            userData.coinBUntil &&
+            userData.coinBUntil.toDate().getTime() > Date.now()
+          ) {
+            setIsPremium(true);
+          }
+        }
+      } catch {
+        setIsPremium(false);
+      }
 
       const q = query(
         collection(db, "notifications"),
@@ -93,9 +111,6 @@ export default function PageShell({
 
   const hasAnyUnread = notifications.some((n) => n.read === false);
 
-  /* -----------------------------
-     SEARCH BY PUBLIC ID
-  ------------------------------*/
   async function runSearch() {
     const v = search.trim();
 
@@ -124,7 +139,6 @@ export default function PageShell({
       setShowSearchModal(false);
       setSearch("");
 
-      // 🔒 SAFE REDIRECT — PROFILE PAGE HANDLES ITS OWN LAYOUT
       router.push(`/u/${uid}`);
     } catch {
       alert("Search failed");
@@ -133,10 +147,8 @@ export default function PageShell({
 
   return (
     <div className="min-h-screen bg-gray-100 pb-16">
-      {/* HEADER */}
       <header className="bg-white border-b px-4 py-3 sticky top-0 z-30">
         <div className="flex items-center justify-between">
-          {/* LOGO */}
           <Link href="/home" className="flex items-center">
             <img
               src="/logo.svg"
@@ -145,8 +157,16 @@ export default function PageShell({
             />
           </Link>
 
-          <div className="flex items-center gap-4">
-            {/* Sexy Search — INSTANT POPUP */}
+          <div className="flex items-center gap-3">
+            {!isPremium && (
+              <Link
+                href="/store"
+                className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-3 py-1.5 text-xs font-semibold text-white shadow-[0_0_12px_rgba(236,72,153,0.45)] transition hover:scale-105"
+              >
+                Upgrade
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={() => setShowSearchModal(true)}
@@ -159,7 +179,6 @@ export default function PageShell({
               />
             </button>
 
-            {/* Sexy Likes */}
             <Link
               href="/activity"
               className="relative transition-transform hover:scale-110"
@@ -174,7 +193,6 @@ export default function PageShell({
               )}
             </Link>
 
-            {/* Sexy Menu */}
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -192,7 +210,6 @@ export default function PageShell({
 
       {stickyMenu}
 
-      {/* SEARCH MODAL */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="app-card w-[90%] max-w-sm rounded-2xl p-4">
@@ -230,7 +247,6 @@ export default function PageShell({
         </div>
       )}
 
-      {/* HAMBURGER MENU */}
       {open && (
         <div className="fixed top-14 right-4 z-50 w-48 rounded-xl border bg-white shadow text-gray-900">
           <nav className="flex flex-col divide-y divide-gray-200 text-sm">
